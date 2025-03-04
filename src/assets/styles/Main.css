@@ -1,0 +1,22 @@
+/* Add font-family to root */
+:root {
+    --heading-font: 'Raleway', sans-serif;
+    --body-font: 'Poppins', sans-serif;
+  }
+  
+  /* Reset default margins and padding */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: var(--body-font);
+  }
+  
+  /* Reset body and html to take full height */
+  html, body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
