@@ -4,6 +4,7 @@ import TopNavbar from "../components/Topbar";
 import "../assets/styles/Dashboard.css";
 
 
+
 function Dashboard() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -20,12 +21,12 @@ function Dashboard() {
             <div className={`dashboard-content ${isSidebarOpen ? 'sidebar-open' : ''}`}>
                 <TopNavbar />
             <div className="card-container">
-                <div className="card">
+            <div className="card">
                     <div className="profile-icon">👤</div>
                     <div className="card-details">
-                        <h3>Name: John Doe</h3>
-                        <p>Number: 123-456-7890</p>
-                        <p>Email: john.doe@example.com</p>
+                        <h3>Name: Jane Smith</h3>
+                        <p>Number: 987-654-3210</p>
+                        <p>Email: jane.smith@example.com</p>
                     </div>
                 </div>
                 <div className="card">
