@@ -149,7 +149,7 @@ function Estimate_Generation() {
       doc.rect(5, 5, 200, 287);
       
       // Add logo and company details only on first page
-      const logoUrl = 'public/takshaga_white.png';
+      const logoUrl = '/takshaga_white.png';
       doc.addImage(logoUrl, 'PNG', 8, 10, 50, 38);
       
       // Add company details below logo
