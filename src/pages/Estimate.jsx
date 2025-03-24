@@ -29,14 +29,8 @@ function Estimate() {
             <Cog size={50} />
             <h3>GENERATION</h3>
             <Link to="/estimate_generation">
-            <button>Add</button>
+            <button>Generate</button>
             </Link>
-          </div>
-
-          <div class="card">
-            <PlusCircle size={50} />
-            <h3>PRESET CREATION</h3>
-            <button style={{ backgroundColor: "#FFA500" }}>Update</button>
           </div>
         </div>
       </div>

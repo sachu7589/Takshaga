@@ -20,7 +20,7 @@ const TopNavbar = () => {
             <div className="avatar">
               <User size={20} />
             </div>
-            <span className="username">sachu saji</span>
+            <span className="username">Jinto Jose</span>
           </button>
         </div>
       </div>
