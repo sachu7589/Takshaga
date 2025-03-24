@@ -2,9 +2,41 @@ import { useState } from "react";
 import Sidebar from "../components/Sidebar";
 import TopNavbar from "../components/Topbar";
 import "../assets/styles/Estimate.css";
-import { Edit, Trash2, FileDown, Eye } from "lucide-react";
+import { Edit, Trash2, FileDown, Eye, Send } from "lucide-react";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
+  input::placeholder,
+  textarea::placeholder {
+    color: #94a3b8 !important;
+    opacity: 1;
+  }
+
+  input:focus,
+  textarea:focus {
+    outline: none;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input:hover,
+  textarea:hover {
+    border-color: #94a3b8 !important;
+  }
+`;
+document.head.appendChild(styleSheet);
 
 function Estimate_Generation() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -303,6 +335,198 @@ function Estimate_Generation() {
     }
   };
 
+  const handleWhatsAppSend = async () => {
+    try {
+      // Generate PDF blob
+      const doc = new jsPDF();
+      
+      // Add border to first page
+      doc.rect(5, 5, 200, 287);
+      
+      // Add logo and company details only on first page
+      const logoUrl = '/takshaga_white.png';
+      doc.addImage(logoUrl, 'PNG', 8, 10, 50, 38);
+      
+      // Add company details below logo
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Takshaka", 20, 40);
+      doc.text("Upputhara po", 20, 45);
+      doc.text("Idukki", 20, 50);
+      doc.text("685505", 20, 55);
+
+      // Add contact details on right side
+      doc.text("Phone: +91 9846660624", 140, 40);
+      doc.text("Phone: +91 9544344332", 140, 45);
+      doc.text("www.takshaga.com", 140, 50);
+      
+      // Add estimate title
+      doc.setFontSize(14);
+      doc.setTextColor(0);
+      doc.text("ESTIMATE", 105, 70, { align: "center" });
+      
+      // Add estimate details on left
+      doc.setFontSize(10);
+      doc.text("Invoice No: EST-" + new Date().getTime(), 20, 85);
+      doc.text("Date: " + new Date().toLocaleDateString(), 20, 90);
+
+      // Add client details on right with "To:" prefix
+      doc.text("To:", 155, 85);
+      doc.text(clientName, 160, 90);
+      doc.text(clientAddress, 160, 95);
+      
+      let yPos = 110;
+      let currentPage = 1;
+      
+      categories.forEach((category) => {
+        // Check if we need a new page
+        if (yPos > 250) {
+          doc.addPage();
+          currentPage++;
+          doc.rect(5, 5, 200, 287); // Add border to new page
+          yPos = 30; // Start from top on new pages
+        }
+
+        // Add category details
+        doc.setFontSize(12);
+        doc.setTextColor(30, 41, 59);
+        doc.text(`${category.category}`, 20, yPos);
+        
+        yPos += 10;
+        
+        category.subCategories.forEach((subCategory) => {
+          // Check if we need a new page
+          if (yPos > 250) {
+            doc.addPage();
+            currentPage++;
+            doc.rect(5, 5, 200, 287); // Add border to new page
+            yPos = 30; // Start from top on new pages
+          }
+
+          doc.setFontSize(10);
+          doc.setTextColor(100, 116, 139);
+          doc.text(`${subCategory.name}`, 20, yPos);
+          
+          // Add materials table
+          const tableData = subCategory.materials.map(material => {
+            const area = calculateArea(material.length, material.breadth);
+            const total = calculateTotal(area, material.quantity, material.unitPrice);
+            return [
+              material.name,
+              `${material.length} x ${material.breadth}`,
+              `${area.toFixed(2)} sq ft`,
+              material.quantity,
+              `Rs. ${material.unitPrice}`,
+              `Rs. ${total.toFixed(2)}`
+            ];
+          });
+
+          autoTable(doc, {
+            startY: yPos + 5,
+            head: [['Material', 'Dimensions', 'Area', 'Quantity', 'Unit Price', 'Total']],
+            body: tableData,
+            theme: 'grid',
+            headStyles: { fillColor: [248, 250, 252], textColor: [0, 0, 0] },
+            styles: { fontSize: 8 },
+            pageBreak: 'auto',
+            didDrawPage: function(data) {
+              // Add border to new pages created by autoTable
+              if (data.pageNumber > currentPage) {
+                currentPage = data.pageNumber;
+                doc.rect(5, 5, 200, 287);
+              }
+            }
+          });
+          
+          yPos = doc.lastAutoTable.finalY + 15;
+        });
+      });
+
+      // Add final page with grand total and payment terms
+      if (yPos > 200) { // If not enough space, create new page
+        doc.addPage();
+        doc.rect(5, 5, 200, 287); // Add border to new page
+        yPos = 30; // Start from top
+      }
+
+      // Add grand total
+      doc.setDrawColor(226, 232, 240);
+      doc.line(20, yPos - 10, 190, yPos - 10);
+      
+      doc.setFontSize(12);
+      doc.setTextColor(30, 41, 59);
+      doc.setFont(undefined, 'bold');
+      doc.text(`Grand Total: Rs. ${calculateGrandTotal().toFixed(2)}`, 190, yPos, { align: 'right' });
+      
+      // Add payment terms note
+      yPos += 20;
+      doc.setFontSize(10);
+      doc.setTextColor(30, 41, 59);
+      doc.text("NOTE:", 20, yPos);
+      yPos += 7;
+      doc.setFontSize(8);
+      doc.text("* The above rate inclusive of material cost, transportation, labour charges and service charges", 25, yPos);
+      yPos += 5;
+      doc.text("* Advance 50% of total amount along with the confirmed work order", 25, yPos);
+      yPos += 5;
+      doc.text("* 25% of the total amount after completion of carcass and cabin partition works", 25, yPos);
+      yPos += 5;
+      doc.text("* Balance 25% of the total amount after completing shutter works", 25, yPos);
+      yPos += 5;
+      doc.text("* Additional work and area are calculated separately", 25, yPos);
+      
+      // Add footer
+      yPos += 15;
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Thank you !", 105, yPos, { align: "center" });
+      
+      // Add page numbers to all pages
+      const pageCount = doc.internal.getNumberOfPages();
+      for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.text(`Page ${i} of ${pageCount}`, 105, 290, { align: 'center' });
+      }
+
+      // Save the PDF
+      const fileName = `${clientName.trim().replace(/\s+/g, '_')}_estimate.pdf`;
+      doc.save(fileName);
+
+      // Format the message with client details and total
+      const message = `Dear ${clientName},\n\n` +
+        `Thank you for choosing Takshaga for your project. Please find the estimate details below:\n\n` +
+        `📋 *Estimate Details*\n` +
+        `Client: ${clientName}\n` +
+        `Address: ${clientAddress}\n` +
+        `Date: ${new Date().toLocaleDateString()}\n` +
+        `Invoice No: EST-${new Date().getTime()}\n\n` +
+        `💰 *Total Amount: Rs. ${calculateGrandTotal().toFixed(2)}*\n\n` +
+        `📞 *Contact Us*\n` +
+        `Phone: +91 9846660624\n` +
+        `Phone: +91 9544344332\n` +
+        `Website: www.takshaga.com\n\n` +
+        `📍 *Our Address*\n` +
+        `Takshaga\n` +
+        `Upputhara po\n` +
+        `Idukki\n` +
+        `685505\n\n` +
+        `Thank you for your trust in our services!\n\n` +
+        `Best regards,\n` +
+        `Team Takshaga`;
+
+      // Encode the message for URL
+      const encodedMessage = encodeURIComponent(message);
+      
+      // Open WhatsApp with the message
+      window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+      
+    } catch (error) {
+      console.error("Error preparing WhatsApp message:", error);
+      alert("There was an error preparing the WhatsApp message. Please try again.");
+    }
+  };
+
   const calculateGrandTotal = () => {
     return categories.reduce((categoryTotal, category) => {
       return categoryTotal + category.subCategories.reduce((subCategoryTotal, subCategory) => {
@@ -312,6 +536,36 @@ function Estimate_Generation() {
         }, 0);
       }, 0);
     }, 0);
+  };
+
+  // Add these styles before the return statement
+  const inputStyles = {
+    padding: '10px',
+    border: '1px solid #cbd5e1',
+    borderRadius: '6px',
+    width: '100%',
+    fontSize: '16px',
+    color: '#1e293b',
+    backgroundColor: '#fff',
+    transition: 'all 0.3s ease',
+    '&:focus': {
+      outline: 'none',
+      borderColor: '#3b82f6',
+      boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.1)'
+    }
+  };
+
+  const textareaStyles = {
+    ...inputStyles,
+    minHeight: '100px',
+    resize: 'vertical'
+  };
+
+  const labelStyles = {
+    display: 'block',
+    marginBottom: '8px',
+    color: '#1e293b',
+    fontWeight: '500'
   };
 
   return (
@@ -339,12 +593,7 @@ function Estimate_Generation() {
                   <h3 style={{color: '#3b82f6', marginBottom: '25px'}}>Client Details</h3>
 
                   <div className="form-group" style={{marginBottom: '25px'}}>
-                    <label style={{
-                      display: 'block',
-                      marginBottom: '8px',
-                      color: '#1e293b',
-                      fontWeight: '500'
-                    }}>
+                    <label style={labelStyles}>
                       Client Name
                     </label>
                     <input
@@ -353,23 +602,16 @@ function Estimate_Generation() {
                       onChange={(e) => setClientName(e.target.value)}
                       placeholder="Enter client name"
                       style={{
-                        padding: '10px',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '6px',
-                        width: '100%',
-                        fontSize: '16px',
-                        color: '#1e293b'
+                        ...inputStyles,
+                        '::placeholder': {
+                          color: '#94a3b8'
+                        }
                       }}
                     />
                   </div>
 
                   <div className="form-group" style={{marginBottom: '25px'}}>
-                    <label style={{
-                      display: 'block',
-                      marginBottom: '8px',
-                      color: '#1e293b',
-                      fontWeight: '500'
-                    }}>
+                    <label style={labelStyles}>
                       Client Address
                     </label>
                     <textarea
@@ -377,13 +619,10 @@ function Estimate_Generation() {
                       onChange={(e) => setClientAddress(e.target.value)}
                       placeholder="Enter client address"
                       style={{
-                        padding: '10px',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '6px',
-                        width: '100%',
-                        fontSize: '16px',
-                        color: '#1e293b',
-                        minHeight: '100px'
+                        ...textareaStyles,
+                        '::placeholder': {
+                          color: '#94a3b8'
+                        }
                       }}
                     />
                   </div>
@@ -399,12 +638,7 @@ function Estimate_Generation() {
                     <h3 style={{color: '#3b82f6', marginBottom: '25px'}}>Category {categoryIndex + 1}</h3>
 
                     <div className="form-group" style={{marginBottom: '25px'}}>
-                      <label style={{
-                        display: 'block',
-                        marginBottom: '8px',
-                        color: '#1e293b',
-                        fontWeight: '500'
-                      }}>
+                      <label style={labelStyles}>
                         Category Name
                       </label>
                       <input
@@ -413,12 +647,10 @@ function Estimate_Generation() {
                         onChange={(e) => handleCategoryChange(categoryIndex, e.target.value)}
                         placeholder="Enter category name"
                         style={{
-                          padding: '10px',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: '6px',
-                          width: '100%',
-                          fontSize: '16px',
-                          color: '#1e293b'
+                          ...inputStyles,
+                          '::placeholder': {
+                            color: '#94a3b8'
+                          }
                         }}
                       />
                     </div>
@@ -433,12 +665,7 @@ function Estimate_Generation() {
                         <h4 style={{color: '#64748b', marginBottom: '20px'}}>Sub Category {subCategoryIndex + 1}</h4>
 
                         <div className="form-group" style={{marginBottom: '20px'}}>
-                          <label style={{
-                            display: 'block',
-                            marginBottom: '8px',
-                            color: '#1e293b',
-                            fontWeight: '500'
-                          }}>
+                          <label style={labelStyles}>
                             Sub Category Name
                           </label>
                           <input
@@ -447,12 +674,10 @@ function Estimate_Generation() {
                             onChange={(e) => handleSubCategoryChange(categoryIndex, subCategoryIndex, e.target.value)}
                             placeholder="Enter sub category name"
                             style={{
-                              padding: '10px',
-                              border: '1px solid #e2e8f0',
-                              borderRadius: '6px',
-                              width: '100%',
-                              fontSize: '16px',
-                              color: '#1e293b'
+                              ...inputStyles,
+                              '::placeholder': {
+                                color: '#94a3b8'
+                              }
                             }}
                           />
                         </div>
@@ -467,12 +692,7 @@ function Estimate_Generation() {
                             <h5 style={{color: '#64748b', marginBottom: '20px'}}>Material {materialIndex + 1}</h5>
 
                             <div className="form-group" style={{marginBottom: '20px'}}>
-                              <label style={{
-                                display: 'block',
-                                marginBottom: '8px',
-                                color: '#1e293b',
-                                fontWeight: '500'
-                              }}>
+                              <label style={labelStyles}>
                                 Material Name
                               </label>
                               <input
@@ -481,24 +701,17 @@ function Estimate_Generation() {
                                 onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'name', e.target.value)}
                                 placeholder="Enter material name"
                                 style={{
-                                  padding: '10px',
-                                  border: '1px solid #e2e8f0',
-                                  borderRadius: '6px',
-                                  width: '100%',
-                                  fontSize: '16px',
-                                  color: '#1e293b'
+                                  ...inputStyles,
+                                  '::placeholder': {
+                                    color: '#94a3b8'
+                                  }
                                 }}
                               />
                             </div>
 
                             <div className="dimensions" style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
                               <div style={{flex: 1}}>
-                                <label style={{
-                                  display: 'block',
-                                  marginBottom: '8px',
-                                  color: '#1e293b',
-                                  fontWeight: '500'
-                                }}>
+                                <label style={labelStyles}>
                                   Length
                                 </label>
                                 <input
@@ -507,22 +720,15 @@ function Estimate_Generation() {
                                   onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'length', parseFloat(e.target.value))}
                                   placeholder="Enter length"
                                   style={{
-                                    padding: '10px',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: '6px',
-                                    width: '100%',
-                                    fontSize: '16px',
-                                    color: '#1e293b'
+                                    ...inputStyles,
+                                    '::placeholder': {
+                                      color: '#94a3b8'
+                                    }
                                   }}
                                 />
                               </div>
                               <div style={{flex: 1}}>
-                                <label style={{
-                                  display: 'block',
-                                  marginBottom: '8px',
-                                  color: '#1e293b',
-                                  fontWeight: '500'
-                                }}>
+                                <label style={labelStyles}>
                                   Breadth
                                 </label>
                                 <input
@@ -531,12 +737,10 @@ function Estimate_Generation() {
                                   onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'breadth', parseFloat(e.target.value))}
                                   placeholder="Enter breadth"
                                   style={{
-                                    padding: '10px',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: '6px',
-                                    width: '100%',
-                                    fontSize: '16px',
-                                    color: '#1e293b'
+                                    ...inputStyles,
+                                    '::placeholder': {
+                                      color: '#94a3b8'
+                                    }
                                   }}
                                 />
                               </div>
@@ -544,12 +748,7 @@ function Estimate_Generation() {
 
                             <div className="quantity-price" style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
                               <div style={{flex: 1}}>
-                                <label style={{
-                                  display: 'block',
-                                  marginBottom: '8px',
-                                  color: '#1e293b',
-                                  fontWeight: '500'
-                                }}>
+                                <label style={labelStyles}>
                                   Quantity
                                 </label>
                                 <input
@@ -558,22 +757,15 @@ function Estimate_Generation() {
                                   onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'quantity', parseInt(e.target.value))}
                                   placeholder="Enter quantity"
                                   style={{
-                                    padding: '10px',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: '6px',
-                                    width: '100%',
-                                    fontSize: '16px',
-                                    color: '#1e293b'
+                                    ...inputStyles,
+                                    '::placeholder': {
+                                      color: '#94a3b8'
+                                    }
                                   }}
                                 />
                               </div>
                               <div style={{flex: 1}}>
-                                <label style={{
-                                  display: 'block',
-                                  marginBottom: '8px',
-                                  color: '#1e293b',
-                                  fontWeight: '500'
-                                }}>
+                                <label style={labelStyles}>
                                   Unit Price (Rs.)
                                 </label>
                                 <input
@@ -582,12 +774,10 @@ function Estimate_Generation() {
                                   onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'unitPrice', parseFloat(e.target.value))}
                                   placeholder="Enter unit price"
                                   style={{
-                                    padding: '10px',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: '6px',
-                                    width: '100%',
-                                    fontSize: '16px',
-                                    color: '#1e293b'
+                                    ...inputStyles,
+                                    '::placeholder': {
+                                      color: '#94a3b8'
+                                    }
                                   }}
                                 />
                               </div>
@@ -780,6 +970,23 @@ function Estimate_Generation() {
                     }}
                   >
                     <FileDown size={16} /> Download PDF
+                  </button>
+                  <button
+                    onClick={handleWhatsAppSend}
+                    className="whatsapp-btn"
+                    style={{
+                      backgroundColor: '#25D366',
+                      color: 'white', 
+                      padding: '10px 20px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}
+                  >
+                    <Send size={16} /> Share on WhatsApp
                   </button>
                 </div>
               </div>
