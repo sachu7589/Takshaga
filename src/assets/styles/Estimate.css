@@ -88,7 +88,7 @@
     margin: 8px;
     padding: 12px 20px;
     color: #ffffff;
-    background: rgba(255, 6, 6, 0.15);
+    background: rgba(239, 68, 68, 0.15);
     border: none;
     cursor: pointer;
     font-size: 14px;
@@ -322,12 +322,25 @@
     border-radius: 8px;  /* Rounded corners */
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);  /* Subtle shadow for depth */
     padding: 20px;  /* Padding inside cards */
+    text-align: center; /* Center content */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     transition: transform 0.3s;  /* Smooth transform on hover */
 }
 
 .card:hover {
     transform: translateY(-5px);  /* Lift effect on hover */
 }
+
+.profile-icon {
+    font-size: 40px; /* Bigger profile icon */
+    margin-bottom: 10px;
+}
+
+/* Add Client Button Styling */
+
 
 /* Mobile view adjustments */
 @media (max-width: 768px) {
@@ -339,3 +352,68 @@
         flex: 1 1 100%;  /* Full width for cards in mobile view */
     }
 }
+.table-wrapper {
+    margin: 20px;
+    padding: 20px;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    max-width: 100%;
+    overflow-x: auto; /* Enables horizontal scrolling on small screens */
+  }
+  
+  /* Ensures the table fits within the content area */
+  .table-container {
+    width: 100%;
+    overflow-x: auto; 
+  }
+  
+  /* Table styles */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px; /* Prevents table from shrinking too much */
+  }
+  
+  th, td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+    white-space: nowrap; /* Prevents text from breaking */
+  }
+  
+  th {
+    background-color: #f4f4f4;
+  }
+  
+  /* Responsive styles */
+  @media (max-width: 768px) {
+    .table-container {
+      overflow-x: auto; /* Ensures table remains scrollable */
+    }
+  
+    th, td {
+      padding: 8px;
+      font-size: 14px;
+    }
+  }
+  
+  /* Action buttons */
+  .edit-btn, .delete-btn {
+    background: none !important; /* Remove any existing background */
+    border: none;
+    cursor: pointer;
+    margin: 0 5px;
+    padding: 5px; /* Adjust padding for clickability */
+    font-size: 16px; /* Keep consistent font size */
+    transition: color 0.3s ease-in-out;
+}
+
+.edit-btn:hover {
+    color: blue;
+}
+
+.delete-btn:hover {
+    color: red;
+}
+  

@@ -88,7 +88,7 @@
     margin: 8px;
     padding: 12px 20px;
     color: #ffffff;
-    background: rgba(255, 6, 6, 0.15);
+    background: rgba(239, 68, 68, 0.15);
     border: none;
     cursor: pointer;
     font-size: 14px;
@@ -322,11 +322,38 @@
     border-radius: 8px;  /* Rounded corners */
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);  /* Subtle shadow for depth */
     padding: 20px;  /* Padding inside cards */
+    text-align: center; /* Center content */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     transition: transform 0.3s;  /* Smooth transform on hover */
 }
 
 .card:hover {
     transform: translateY(-5px);  /* Lift effect on hover */
+}
+
+.profile-icon {
+    font-size: 40px; /* Bigger profile icon */
+    margin-bottom: 10px;
+}
+
+/* Add Client Button Styling */
+.card button {
+    background-color: #4CAF50; /* Green button */
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    font-size: 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s ease-in-out;
+    margin-top: 10px;
+}
+
+.card button:hover {
+    background-color: #45a049; /* Darker green on hover */
 }
 
 /* Mobile view adjustments */
