@@ -6,10 +6,15 @@
 }
 
 .dashboard-content {
+    margin-left: 280px; /* Keep sidebar space */
+    margin-top: 0; /* Remove top margin */
+    min-height: 100vh;
+    background: linear-gradient(135deg, rgba(246, 249, 252, 0.8) 0%, rgba(241, 245, 249, 0.8) 100%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     flex: 1;
     display: flex;
     flex-direction: column;
-    margin-top: 80px;  /* Increased to account for taller navbar */
     transition: margin-left 0.3s ease;
 }
 
@@ -104,18 +109,14 @@
 
 /* Top Navbar Styles */
 .top-navbar {
-    position: fixed;
+    position: absolute; /* Change from fixed to absolute */
     top: 0;
-    left: 0;
+    left: 280px; /* Match sidebar width */
     right: 0;
-    height: 80px;  /* Set explicit height */
-    background: rgba(30, 58, 138, 0.85);  /* Slightly lighter for contrast */
+    height: 80px;
+    background: rgba(30, 58, 138, 0.85);
     backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 0 24px;  /* Adjusted padding to use height for vertical centering */
-    color: #ffffff;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-    z-index: 1000;  /* Ensure top navbar is above other elements */
+    z-index: 1000;
 }
 
 .navbar-content {
@@ -318,9 +319,12 @@
 .card {
     flex: 1 1 30%;  /* Allow cards to take up to 30% of the row in web view */
     margin: 10px;  /* Add margin between cards */
-    background: #ffffff;  /* White background for cards */
-    border-radius: 8px;  /* Rounded corners */
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);  /* Subtle shadow for depth */
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 20px;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
     padding: 20px;  /* Padding inside cards */
     text-align: center; /* Center content */
     display: flex;
@@ -373,6 +377,11 @@
     width: 100%;
     border-collapse: collapse;
     min-width: 600px; /* Prevents table from shrinking too much */
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 10px;
+    overflow: hidden;
   }
   
   th, td {
@@ -383,7 +392,9 @@
   }
   
   th {
-    background-color: #f4f4f4;
+    background: rgba(248, 250, 252, 0.8);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
   }
   
   /* Responsive styles */
@@ -415,5 +426,227 @@
 
 .delete-btn:hover {
     color: red;
+}
+
+/* Update CategoryCard styling */
+.category-section {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+/* Update form inputs styling */
+input, textarea {
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(203, 213, 225, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+/* Update button styling */
+button {
+    background: rgba(59, 130, 246, 0.8);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+}
+
+button:hover {
+    background: rgba(59, 130, 246, 0.9);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(59, 130, 246, 0.2);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .dashboard-content {
+        margin-left: 0;
+    }
+    
+    .top-navbar {
+        left: 0;
+    }
+    
+    .dashboard-content.sidebar-open {
+        margin-left: 280px;
+    }
+}
+
+/* Card and Section Hover Effects */
+.category-card {
+  background: rgba(248, 250, 252, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.category-card:hover {
+  background: rgba(255, 255, 255, 1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: #e2e8f0;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.form-section {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.form-section:hover {
+  background: rgba(255, 255, 255, 1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: #e2e8f0;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* Materials Table Hover Effect */
+.materials-table {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 1rem 0;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.materials-table:hover {
+  background: rgba(255, 255, 255, 1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: #e2e8f0;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* Preview Panel Hover Effect */
+.estimate-preview-panel {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.estimate-preview-panel:hover {
+  background: rgba(255, 255, 255, 1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: #e2e8f0;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* Input Field Hover Effects */
+.form-field input,
+.form-field textarea {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: all 0.3s ease;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.form-field input:hover,
+.form-field textarea:hover {
+  background: rgba(255, 255, 255, 1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: #e2e8f0;
+}
+
+.form-field input:focus,
+.form-field textarea:focus {
+  background: white;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Button Hover Effects */
+.action-btn {
+  background: rgba(59, 130, 246, 0.8);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: all 0.3s ease;
+}
+
+.action-btn:hover {
+  background: rgba(59, 130, 246, 1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.2);
+}
+
+/* Table Header Hover Effect */
+.materials-table th {
+  background: rgba(241, 245, 249, 0.8);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: all 0.3s ease;
+}
+
+.materials-table:hover th {
+  background: rgba(241, 245, 249, 1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Add smooth background transition for the main container */
+.main-content {
+  background: linear-gradient(135deg, rgba(240, 244, 248, 0.8) 0%, rgba(248, 250, 252, 0.8) 100%);
+  transition: all 0.3s ease;
+}
+
+/* Optional: Add a subtle animation for the hover state */
+@keyframes removeBlur {
+  from {
+    backdrop-filter: blur(8px);
+  }
+  to {
+    backdrop-filter: none;
+  }
+}
+
+/* Add smooth transitions for all elements */
+* {
+  transition: background-color 0.3s ease,
+              backdrop-filter 0.3s ease,
+              box-shadow 0.3s ease,
+              transform 0.3s ease,
+              border-color 0.3s ease;
+}
+
+/* Remove hover effects for styled component */
+.sc-glJfXD.PSRiK {
+  transition: none !important;
+}
+
+.sc-glJfXD.PSRiK:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  background: inherit !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-color: inherit !important;
 }
   

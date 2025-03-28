@@ -2,9 +2,12 @@ import { useState } from "react";
 import Sidebar from "../components/Sidebar";
 import TopNavbar from "../components/Topbar";
 import "../assets/styles/Estimate.css";
-import { Edit, Trash2, FileDown, Eye, Send } from "lucide-react";
+import { Edit, Trash2, FileDown, Eye, Send, User, Folder, List, Plus} from "lucide-react";
+
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { motion } from "framer-motion";
+import styled from "styled-components";
 
 const styleSheet = document.createElement('style');
 styleSheet.textContent = `
@@ -37,6 +40,113 @@ styleSheet.textContent = `
   }
 `;
 document.head.appendChild(styleSheet);
+
+// Add styled components
+const PageContainer = styled(motion.div)`
+  background: linear-gradient(135deg, #f6f9fc 0%, #f1f5f9 100%);
+  min-height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
+  
+  /* Custom scrollbar styling */
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 4px;
+    
+    &:hover {
+      background: #64748b;
+    }
+  }
+`;
+
+const ContentWrapper = styled.div`
+  padding: 2rem;
+  height: calc(100vh - 60px); // Adjust based on your navbar height
+  overflow-y: auto;
+  
+  /* Custom scrollbar styling */
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 4px;
+    
+    &:hover {
+      background: #64748b;
+    }
+  }
+`;
+
+const Card = styled(motion.div)`
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  padding: 2rem;
+  margin-bottom: 2rem;
+  overflow-y: visible;
+`;
+
+const CategoryCard = styled(motion.div)`
+  background: white;
+  border-radius: 15px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+  border: 1px solid #f1f5f9;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+  }
+  transition: all 0.3s ease;
+`;
+
+const StyledButton = styled(motion.button)`
+  background: ${props => props.variant === 'primary' ? '#3b82f6' : '#2563eb'};
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(59, 130, 246, 0.2);
+  }
+`;
+
+const StyledComponent = styled.div`
+  /* Your existing styles */
+  
+  /* Remove hover effects */
+  &:hover {
+    transform: none;
+    box-shadow: none;
+    background: inherit;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: inherit;
+  }
+`;
 
 function Estimate_Generation() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -538,340 +648,449 @@ function Estimate_Generation() {
     }, 0);
   };
 
-  // Add these styles before the return statement
-  const inputStyles = {
-    padding: '10px',
-    border: '1px solid #cbd5e1',
-    borderRadius: '6px',
-    width: '100%',
-    fontSize: '16px',
-    color: '#1e293b',
-    backgroundColor: '#fff',
-    transition: 'all 0.3s ease',
-    '&:focus': {
-      outline: 'none',
-      borderColor: '#3b82f6',
-      boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.1)'
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { 
+      opacity: 1,
+      transition: { 
+        duration: 0.5,
+        when: "beforeChildren",
+        staggerChildren: 0.1
+      }
     }
   };
 
-  const textareaStyles = {
-    ...inputStyles,
-    minHeight: '100px',
-    resize: 'vertical'
-  };
-
-  const labelStyles = {
-    display: 'block',
-    marginBottom: '8px',
-    color: '#1e293b',
-    fontWeight: '500'
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: { 
+      y: 0,
+      opacity: 1,
+      transition: { duration: 0.5 }
+    }
   };
 
   return (
-    <div className={`dashboard-container ${isSidebarOpen ? "sidebar-open" : ""}`} style={{minHeight: '100vh', overflowY: 'auto'}}>
+    <div className={`dashboard-container ${isSidebarOpen ? "sidebar-open" : ""}`}>
       <button className="hamburger" onClick={toggleSidebar}>
         &#9776;
       </button>
       <Sidebar isOpen={isSidebarOpen} />
-      <div className={`dashboard-content ${isSidebarOpen ? "sidebar-open" : ""}`} style={{minHeight: '100vh', overflowY: 'auto', paddingBottom: '50px'}}>
-        <TopNavbar />
-
-        <div className="card-container">
-          <div className="card">
+      
+      <PageContainer
+        initial="hidden"
+        animate="visible"
+        variants={containerVariants}
+        className={`dashboard-content ${isSidebarOpen ? "sidebar-open" : ""}`}
+      >
+        
+        <ContentWrapper>
+          <Card variants={itemVariants}>
             {!showPreview ? (
-              <>
-                <h2 style={{color: '#2563eb', marginBottom: '30px'}}>Generate Estimate</h2>
+              <motion.div layout>
+                <motion.h2 
+                  className="text-3xl font-bold mb-8"
+                  style={{ 
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent'
+                  }}
+                >
+                  Generate Estimate
+                </motion.h2>
 
                 {/* Client Details Section */}
-                <div className="client-details" style={{
-                  backgroundColor: '#f1f5f9',
-                  padding: '25px',
-                  borderRadius: '8px',
-                  marginBottom: '35px'
-                }}>
-                  <h3 style={{color: '#3b82f6', marginBottom: '25px'}}>Client Details</h3>
-
-                  <div className="form-group" style={{marginBottom: '25px'}}>
-                    <label style={labelStyles}>
-                      Client Name
-                    </label>
-                    <input
-                      type="text"
-                      value={clientName}
-                      onChange={(e) => setClientName(e.target.value)}
-                      placeholder="Enter client name"
-                      style={{
-                        ...inputStyles,
-                        '::placeholder': {
-                          color: '#94a3b8'
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <div className="form-group" style={{marginBottom: '25px'}}>
-                    <label style={labelStyles}>
-                      Client Address
-                    </label>
-                    <textarea
-                      value={clientAddress}
-                      onChange={(e) => setClientAddress(e.target.value)}
-                      placeholder="Enter client address"
-                      style={{
-                        ...textareaStyles,
-                        '::placeholder': {
-                          color: '#94a3b8'
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {categories.map((category, categoryIndex) => (
-                  <div key={categoryIndex} className="category-section" style={{
-                    backgroundColor: '#f1f5f9',
-                    padding: '25px',
-                    borderRadius: '8px',
-                    marginBottom: '35px'
-                  }}>
-                    <h3 style={{color: '#3b82f6', marginBottom: '25px'}}>Category {categoryIndex + 1}</h3>
+                <CategoryCard variants={itemVariants}>
+                  <motion.div 
+                    className="client-details"
+                    style={{
+                      background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                      padding: '2rem',
+                      borderRadius: '15px'
+                    }}
+                  >
+                    <h3 style={{color: '#3b82f6', marginBottom: '25px'}}>Client Details</h3>
 
                     <div className="form-group" style={{marginBottom: '25px'}}>
-                      <label style={labelStyles}>
-                        Category Name
+                      <label style={{display: 'block', marginBottom: '8px', color: '#1e293b', fontWeight: '500'}}>
+                        Client Name
                       </label>
                       <input
                         type="text"
-                        value={category.category}
-                        onChange={(e) => handleCategoryChange(categoryIndex, e.target.value)}
-                        placeholder="Enter category name"
+                        value={clientName}
+                        onChange={(e) => setClientName(e.target.value)}
+                        placeholder="Enter client name"
                         style={{
-                          ...inputStyles,
-                          '::placeholder': {
-                            color: '#94a3b8'
+                          padding: '10px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          width: '100%',
+                          fontSize: '16px',
+                          color: '#1e293b',
+                          backgroundColor: '#fff',
+                          transition: 'all 0.3s ease',
+                          '&:focus': {
+                            outline: 'none',
+                            borderColor: '#3b82f6',
+                            boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.1)'
                           }
                         }}
                       />
                     </div>
 
-                    {category.subCategories.map((subCategory, subCategoryIndex) => (
-                      <div key={subCategoryIndex} className="subcategory-section" style={{
-                        backgroundColor: '#f8fafc',
-                        padding: '20px',
-                        borderRadius: '8px',
-                        marginBottom: '20px'
-                      }}>
-                        <h4 style={{color: '#64748b', marginBottom: '20px'}}>Sub Category {subCategoryIndex + 1}</h4>
+                    <div className="form-group" style={{marginBottom: '25px'}}>
+                      <label style={{display: 'block', marginBottom: '8px', color: '#1e293b', fontWeight: '500'}}>
+                        Client Address
+                      </label>
+                      <textarea
+                        value={clientAddress}
+                        onChange={(e) => setClientAddress(e.target.value)}
+                        placeholder="Enter client address"
+                        style={{
+                          padding: '10px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          width: '100%',
+                          fontSize: '16px',
+                          color: '#1e293b',
+                          backgroundColor: '#fff',
+                          transition: 'all 0.3s ease',
+                          '&:focus': {
+                            outline: 'none',
+                            borderColor: '#3b82f6',
+                            boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.1)'
+                          },
+                          minHeight: '100px',
+                          resize: 'vertical'
+                        }}
+                      />
+                    </div>
+                  </motion.div>
+                </CategoryCard>
 
-                        <div className="form-group" style={{marginBottom: '20px'}}>
-                          <label style={labelStyles}>
-                            Sub Category Name
-                          </label>
-                          <input
-                            type="text"
-                            value={subCategory.name}
-                            onChange={(e) => handleSubCategoryChange(categoryIndex, subCategoryIndex, e.target.value)}
-                            placeholder="Enter sub category name"
-                            style={{
-                              ...inputStyles,
-                              '::placeholder': {
-                                color: '#94a3b8'
-                              }
-                            }}
-                          />
-                        </div>
-
-                        {subCategory.materials.map((material, materialIndex) => (
-                          <div key={materialIndex} className="material-section" style={{
-                            backgroundColor: '#fff',
-                            padding: '20px',
-                            borderRadius: '8px',
-                            marginBottom: '20px'
-                          }}>
-                            <h5 style={{color: '#64748b', marginBottom: '20px'}}>Material {materialIndex + 1}</h5>
-
-                            <div className="form-group" style={{marginBottom: '20px'}}>
-                              <label style={labelStyles}>
-                                Material Name
-                              </label>
-                              <input
-                                type="text"
-                                value={material.name}
-                                onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'name', e.target.value)}
-                                placeholder="Enter material name"
-                                style={{
-                                  ...inputStyles,
-                                  '::placeholder': {
-                                    color: '#94a3b8'
-                                  }
-                                }}
-                              />
-                            </div>
-
-                            <div className="dimensions" style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
-                              <div style={{flex: 1}}>
-                                <label style={labelStyles}>
-                                  Length
-                                </label>
-                                <input
-                                  type="number"
-                                  value={material.length}
-                                  onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'length', parseFloat(e.target.value))}
-                                  placeholder="Enter length"
-                                  style={{
-                                    ...inputStyles,
-                                    '::placeholder': {
-                                      color: '#94a3b8'
-                                    }
-                                  }}
-                                />
-                              </div>
-                              <div style={{flex: 1}}>
-                                <label style={labelStyles}>
-                                  Breadth
-                                </label>
-                                <input
-                                  type="number"
-                                  value={material.breadth}
-                                  onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'breadth', parseFloat(e.target.value))}
-                                  placeholder="Enter breadth"
-                                  style={{
-                                    ...inputStyles,
-                                    '::placeholder': {
-                                      color: '#94a3b8'
-                                    }
-                                  }}
-                                />
-                              </div>
-                            </div>
-
-                            <div className="quantity-price" style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
-                              <div style={{flex: 1}}>
-                                <label style={labelStyles}>
-                                  Quantity
-                                </label>
-                                <input
-                                  type="number"
-                                  value={material.quantity}
-                                  onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'quantity', parseInt(e.target.value))}
-                                  placeholder="Enter quantity"
-                                  style={{
-                                    ...inputStyles,
-                                    '::placeholder': {
-                                      color: '#94a3b8'
-                                    }
-                                  }}
-                                />
-                              </div>
-                              <div style={{flex: 1}}>
-                                <label style={labelStyles}>
-                                  Unit Price (Rs.)
-                                </label>
-                                <input
-                                  type="number"
-                                  value={material.unitPrice}
-                                  onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'unitPrice', parseFloat(e.target.value))}
-                                  placeholder="Enter unit price"
-                                  style={{
-                                    ...inputStyles,
-                                    '::placeholder': {
-                                      color: '#94a3b8'
-                                    }
-                                  }}
-                                />
-                              </div>
-                            </div>
-
-                            <div className="calculations" style={{
-                              backgroundColor: '#f8fafc',
-                              padding: '15px',
-                              borderRadius: '6px'
-                            }}>
-                              <p style={{color: '#64748b', marginBottom: '10px'}}>
-                                Area: {calculateArea(material.length, material.breadth).toFixed(2)} square feet
-                              </p>
-                              <p style={{color: '#64748b'}}>
-                                Total Amount: Rs. {calculateTotal(
-                                  calculateArea(material.length, material.breadth),
-                                  material.quantity,
-                                  material.unitPrice
-                                ).toFixed(2)}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-
-                        <button
-                          onClick={() => addNewMaterial(categoryIndex, subCategoryIndex)}
-                          style={{
-                            backgroundColor: '#3b82f6',
-                            color: 'white',
-                            padding: '8px 15px',
-                            borderRadius: '6px',
-                            border: 'none',
-                            cursor: 'pointer',
-                            marginTop: '10px'
-                          }}
-                        >
-                          Add Another Material
-                        </button>
-                      </div>
-                    ))}
-
-                    <button
-                      onClick={() => addNewSubCategory(categoryIndex)}
+                {categories.map((category, categoryIndex) => (
+                  <CategoryCard
+                    key={categoryIndex}
+                    variants={itemVariants}
+                  >
+                    <motion.div 
+                      className="category-section"
                       style={{
-                        backgroundColor: '#3b82f6',
-                        color: 'white',
-                        padding: '8px 15px',
-                        borderRadius: '6px',
-                        border: 'none',
-                        cursor: 'pointer',
-                        marginTop: '10px'
+                        background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                        padding: '2rem',
+                        borderRadius: '15px'
                       }}
                     >
-                      Add Another Sub Category
-                    </button>
-                  </div>
+                      <h3 style={{color: '#3b82f6', marginBottom: '25px'}}>Category {categoryIndex + 1}</h3>
+
+                      <div className="form-group" style={{marginBottom: '25px'}}>
+                        <label style={{display: 'block', marginBottom: '8px', color: '#1e293b', fontWeight: '500'}}>
+                          Category Name
+                        </label>
+                        <input
+                          type="text"
+                          value={category.category}
+                          onChange={(e) => handleCategoryChange(categoryIndex, e.target.value)}
+                          placeholder="Enter category name"
+                          style={{
+                            padding: '10px',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '6px',
+                            width: '100%',
+                            fontSize: '16px',
+                            color: '#1e293b',
+                            backgroundColor: '#fff',
+                            transition: 'all 0.3s ease',
+                            '&:focus': {
+                              outline: 'none',
+                              borderColor: '#3b82f6',
+                              boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.1)'
+                            }
+                          }}
+                        />
+                      </div>
+
+                      {category.subCategories.map((subCategory, subCategoryIndex) => (
+                        <div key={subCategoryIndex} className="subcategory-section" style={{
+                          backgroundColor: '#f8fafc',
+                          padding: '20px',
+                          borderRadius: '8px',
+                          marginBottom: '20px'
+                        }}>
+                          <h4 style={{color: '#64748b', marginBottom: '20px'}}>Sub Category {subCategoryIndex + 1}</h4>
+
+                          <div className="form-group" style={{marginBottom: '20px'}}>
+                            <label style={{display: 'block', marginBottom: '8px', color: '#1e293b', fontWeight: '500'}}>
+                              Sub Category Name
+                            </label>
+                            <input
+                              type="text"
+                              value={subCategory.name}
+                              onChange={(e) => handleSubCategoryChange(categoryIndex, subCategoryIndex, e.target.value)}
+                              placeholder="Enter sub category name"
+                              style={{
+                                padding: '10px',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '6px',
+                                width: '100%',
+                                fontSize: '16px',
+                                color: '#1e293b',
+                                backgroundColor: '#fff',
+                                transition: 'all 0.3s ease',
+                                '&:focus': {
+                                  outline: 'none',
+                                  borderColor: '#3b82f6',
+                                  boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.1)'
+                                }
+                              }}
+                            />
+                          </div>
+
+                          {subCategory.materials.map((material, materialIndex) => (
+                            <div key={materialIndex} className="material-section" style={{
+                              backgroundColor: '#fff',
+                              padding: '20px',
+                              borderRadius: '8px',
+                              marginBottom: '20px'
+                            }}>
+                              <h5 style={{color: '#64748b', marginBottom: '20px'}}>Material {materialIndex + 1}</h5>
+
+                              <div className="form-group" style={{marginBottom: '20px'}}>
+                                <label style={{display: 'block', marginBottom: '8px', color: '#1e293b', fontWeight: '500'}}>
+                                  Material Name
+                                </label>
+                                <input
+                                  type="text"
+                                  value={material.name}
+                                  onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'name', e.target.value)}
+                                  placeholder="Enter material name"
+                                  style={{
+                                    padding: '10px',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '6px',
+                                    width: '100%',
+                                    fontSize: '16px',
+                                    color: '#1e293b',
+                                    backgroundColor: '#fff',
+                                    transition: 'all 0.3s ease',
+                                    '&:focus': {
+                                      outline: 'none',
+                                      borderColor: '#3b82f6',
+                                      boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.1)'
+                                    }
+                                  }}
+                                />
+                              </div>
+
+                              <div className="dimensions" style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
+                                <div style={{flex: 1}}>
+                                  <label style={{display: 'block', marginBottom: '8px', color: '#1e293b', fontWeight: '500'}}>
+                                    Length
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={material.length}
+                                    onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'length', parseFloat(e.target.value))}
+                                    placeholder="Enter length"
+                                    style={{
+                                      padding: '10px',
+                                      border: '1px solid #cbd5e1',
+                                      borderRadius: '6px',
+                                      width: '100%',
+                                      fontSize: '16px',
+                                      color: '#1e293b',
+                                      backgroundColor: '#fff',
+                                      transition: 'all 0.3s ease',
+                                      '&:focus': {
+                                        outline: 'none',
+                                        borderColor: '#3b82f6',
+                                        boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.1)'
+                                      }
+                                    }}
+                                  />
+                                </div>
+                                <div style={{flex: 1}}>
+                                  <label style={{display: 'block', marginBottom: '8px', color: '#1e293b', fontWeight: '500'}}>
+                                    Breadth
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={material.breadth}
+                                    onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'breadth', parseFloat(e.target.value))}
+                                    placeholder="Enter breadth"
+                                    style={{
+                                      padding: '10px',
+                                      border: '1px solid #cbd5e1',
+                                      borderRadius: '6px',
+                                      width: '100%',
+                                      fontSize: '16px',
+                                      color: '#1e293b',
+                                      backgroundColor: '#fff',
+                                      transition: 'all 0.3s ease',
+                                      '&:focus': {
+                                        outline: 'none',
+                                        borderColor: '#3b82f6',
+                                        boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.1)'
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="quantity-price" style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
+                                <div style={{flex: 1}}>
+                                  <label style={{display: 'block', marginBottom: '8px', color: '#1e293b', fontWeight: '500'}}>
+                                    Quantity
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={material.quantity}
+                                    onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'quantity', parseInt(e.target.value))}
+                                    placeholder="Enter quantity"
+                                    style={{
+                                      padding: '10px',
+                                      border: '1px solid #cbd5e1',
+                                      borderRadius: '6px',
+                                      width: '100%',
+                                      fontSize: '16px',
+                                      color: '#1e293b',
+                                      backgroundColor: '#fff',
+                                      transition: 'all 0.3s ease',
+                                      '&:focus': {
+                                        outline: 'none',
+                                        borderColor: '#3b82f6',
+                                        boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.1)'
+                                      }
+                                    }}
+                                  />
+                                </div>
+                                <div style={{flex: 1}}>
+                                  <label style={{display: 'block', marginBottom: '8px', color: '#1e293b', fontWeight: '500'}}>
+                                    Unit Price (Rs.)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={material.unitPrice}
+                                    onChange={(e) => handleMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'unitPrice', parseFloat(e.target.value))}
+                                    placeholder="Enter unit price"
+                                    style={{
+                                      padding: '10px',
+                                      border: '1px solid #cbd5e1',
+                                      borderRadius: '6px',
+                                      width: '100%',
+                                      fontSize: '16px',
+                                      color: '#1e293b',
+                                      backgroundColor: '#fff',
+                                      transition: 'all 0.3s ease',
+                                      '&:focus': {
+                                        outline: 'none',
+                                        borderColor: '#3b82f6',
+                                        boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.1)'
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="calculations" style={{
+                                backgroundColor: '#f8fafc',
+                                padding: '15px',
+                                borderRadius: '6px'
+                              }}>
+                                <p style={{color: '#64748b', marginBottom: '10px'}}>
+                                  Area: {calculateArea(material.length, material.breadth).toFixed(2)} square feet
+                                </p>
+                                <p style={{color: '#64748b'}}>
+                                  Total Amount: Rs. {calculateTotal(
+                                    calculateArea(material.length, material.breadth),
+                                    material.quantity,
+                                    material.unitPrice
+                                  ).toFixed(2)}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+
+                          <button
+                            onClick={() => addNewMaterial(categoryIndex, subCategoryIndex)}
+                            style={{
+                              backgroundColor: '#3b82f6',
+                              color: 'white',
+                              padding: '8px 15px',
+                              borderRadius: '6px',
+                              border: 'none',
+                              cursor: 'pointer',
+                              marginTop: '10px'
+                            }}
+                          >
+                            Add Another Material
+                          </button>
+                        </div>
+                      ))}
+
+                      <button
+                        onClick={() => addNewSubCategory(categoryIndex)}
+                        style={{
+                          backgroundColor: '#3b82f6',
+                          color: 'white',
+                          padding: '8px 15px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          marginTop: '10px'
+                        }}
+                      >
+                        Add Another Sub Category
+                      </button>
+                    </motion.div>
+                  </CategoryCard>
                 ))}
 
-                <div className="button-group" style={{display: 'flex', gap: '10px', marginTop: '30px'}}>
-                  <button
+                <motion.div 
+                  className="button-group"
+                  style={{
+                    display: 'flex',
+                    gap: '1rem',
+                    marginTop: '2rem',
+                    justifyContent: 'flex-end'
+                  }}
+                >
+                  <StyledButton
                     onClick={addNewCategory}
-                    style={{
-                      backgroundColor: '#3b82f6',
-                      color: 'white',
-                      padding: '10px 20px',
-                      borderRadius: '6px',
-                      border: 'none',
-                      cursor: 'pointer'
-                    }}
+                    variant="primary"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
-                    Add Another Category
-                  </button>
-                  <button
+                    <Plus size={18} />
+                    Add Category
+                  </StyledButton>
+                  <StyledButton
                     onClick={() => setShowPreview(true)}
-                    className="preview-btn"
-                    style={{
-                      backgroundColor: '#2563eb',
-                      color: 'white',
-                      padding: '10px 20px',
-                      borderRadius: '6px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px'
-                    }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
-                    <Eye size={16} /> Preview
-                  </button>
-                </div>
-              </>
+                    <Eye size={18} />
+                    Preview
+                  </StyledButton>
+                </motion.div>
+              </motion.div>
             ) : (
-              <div className="preview-section">
-                <h2 style={{color: '#2563eb', marginBottom: '30px'}}>Estimate Preview</h2>
+              <motion.div 
+                className="preview-section"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5 }}
+              >
+                <motion.h2 
+                  className="text-3xl font-bold mb-8"
+                  style={{ 
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent'
+                  }}
+                >
+                  Estimate Preview
+                </motion.h2>
 
                 {/* Client Details Preview */}
                 <div style={{marginBottom: '30px'}}>
@@ -936,66 +1155,76 @@ function Estimate_Generation() {
                   </p>
                 </div>
 
-                <div className="button-group" style={{display: 'flex', gap: '10px', marginTop: '30px'}}>
-                  <button
+                <motion.div 
+                  className="button-group"
+                  style={{
+                    display: 'flex',
+                    gap: '1rem',
+                    marginTop: '2rem',
+                    justifyContent: 'flex-end'
+                  }}
+                >
+                  <StyledButton
                     onClick={() => setShowPreview(false)}
-                    className="edit-btn"
-                    style={{
-                      backgroundColor: '#3b82f6',
-                      color: 'white',
-                      padding: '10px 20px',
-                      borderRadius: '6px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px'
-                    }}
+                    variant="primary"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
-                    <Edit size={16} /> Edit
-                  </button>
-                  <button
+                    <Edit size={18} />
+                    Edit
+                  </StyledButton>
+                  <StyledButton
                     onClick={handleDownloadPDF}
-                    className="download-btn"
-                    style={{
-                      backgroundColor: '#2563eb',
-                      color: 'white',
-                      padding: '10px 20px',
-                      borderRadius: '6px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px'
-                    }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
-                    <FileDown size={16} /> Download PDF
-                  </button>
-                  <button
+                    <FileDown size={18} />
+                    Download PDF
+                  </StyledButton>
+                  <StyledButton
                     onClick={handleWhatsAppSend}
-                    className="whatsapp-btn"
-                    style={{
-                      backgroundColor: '#25D366',
-                      color: 'white', 
-                      padding: '10px 20px',
-                      borderRadius: '6px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px'
-                    }}
+                    style={{ background: '#25D366' }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
-                    <Send size={16} /> Share on WhatsApp
-                  </button>
-                </div>
-              </div>
+                    <Send size={18} />
+                    Share on WhatsApp
+                  </StyledButton>
+                </motion.div>
+              </motion.div>
             )}
-          </div>
-        </div>
-      </div>
+          </Card>
+        </ContentWrapper>
+      </PageContainer>
     </div>
   );
 }
+
+// Add these styles to your CSS file
+const additionalStyles = `
+  .dashboard-container {
+    display: flex;
+    min-height: 100vh;
+    position: relative;
+  }
+
+  .dashboard-content {
+    flex: 1;
+    transition: margin-left 0.3s ease;
+  }
+
+  .dashboard-content.sidebar-open {
+    margin-left: 250px; // Adjust based on your sidebar width
+  }
+
+  @media (max-width: 768px) {
+    .dashboard-content.sidebar-open {
+      margin-left: 0;
+    }
+  }
+`;
+
+// Add this to your existing stylesheet or create a new one
+styleSheet.textContent += additionalStyles;
 
 export default Estimate_Generation;
