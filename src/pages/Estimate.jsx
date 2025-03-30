@@ -23,7 +23,7 @@ function Estimate() {
       <div
         className={`dashboard-content ${isSidebarOpen ? "sidebar-open" : ""}`}
       >
-        <TopNavbar />
+        {/* <TopNavbar /> */}
         <div class="card-container">
           <div class="card">
             <Cog size={50} />

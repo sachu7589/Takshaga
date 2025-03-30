@@ -1226,5 +1226,4 @@ const additionalStyles = `
 
 // Add this to your existing stylesheet or create a new one
 styleSheet.textContent += additionalStyles;
-
 export default Estimate_Generation;
