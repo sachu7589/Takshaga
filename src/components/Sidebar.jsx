@@ -11,7 +11,7 @@ const Sidebar = ({ isOpen }) => {
       </div>
       <nav className="sidebar-nav">
         <ul>
-          {/* <li>
+          <li>
             <NavLink
               to="/dashboard"
               className={({ isActive }) =>
@@ -44,7 +44,7 @@ const Sidebar = ({ isOpen }) => {
               <Package size={20} />
               Product
             </NavLink>
-          </li> */}
+          </li>
           <li>
             <NavLink
               to="/estimate"
@@ -56,7 +56,7 @@ const Sidebar = ({ isOpen }) => {
               Estimate
             </NavLink>
           </li>
-          {/* <li>
+          <li>
             <NavLink
               to="/preset"
               className={({ isActive }) =>
@@ -99,7 +99,7 @@ const Sidebar = ({ isOpen }) => {
               <ChartNoAxesCombined size={20}/>
               Report
             </NavLink>
-          </li> */}
+          </li>
         </ul>
       </nav>
       <div className="logout-section">

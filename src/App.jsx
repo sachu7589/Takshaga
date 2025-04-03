@@ -11,6 +11,7 @@ import Expense from './pages/Expense'
 import Report from './pages/Report'
 import Preset from './pages/Preset'
 import Estimate_Generation from './pages/Estimate_Generation'
+import Register from './pages/Register'
 
 
 
@@ -30,6 +31,7 @@ function App() {
         <Route path='/report' element={<Report/>}/>
         <Route path='/preset' element={<Preset/>}/>
         <Route path='/estimate_generation' element={<Estimate_Generation/>}/>
+        <Route path='/register' element={<Register/>}/>
       </Routes>
     </BrowserRouter>
   )
