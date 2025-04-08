@@ -23,26 +23,7 @@ function Cat_Managment() {
       <div
         className={`dashboard-content ${isSidebarOpen ? "sidebar-open" : ""}`}
       >
-        <TopNavbar />
-        <div class="card-container">
-        <div class="card">
-            <CirclePlus size={50} />
-            <h3>ADD</h3>
-            <button>Add</button>
-          </div>
-
-          <div class="card">
-            <Pencil size={50} />
-            <h3>UPDATE</h3>
-            <button style={{ backgroundColor: "#FFA500" }}>Update</button>
-          </div>
-          
-          <div class="card">
-            <Trash2 size={50} />
-            <h3>DELETE</h3>
-            <button style={{ backgroundColor: "#8B0000" }}>Delete</button>
-          </div>
-        </div>
+       
       </div>
     </div>
   );

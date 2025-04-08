@@ -9,12 +9,14 @@ import '../assets/styles/Main.css'
 function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setIsLoading(true)
     try {
-      const response = await axios.post('http://localhost:3000/api/users/login', {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/users/login`, {
         email,
         password
       });
@@ -58,6 +60,8 @@ function Login() {
           timer: 3000
         });
       }
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -87,8 +91,16 @@ function Login() {
               required
             />
           </div>
-          <button type="submit" className="login-button">
-            Login
+          <button type="submit" className="login-button" disabled={isLoading}>
+            {isLoading ? (
+              <div className="loading-animation">
+                <span className="dot dot1"></span>
+                <span className="dot dot2"></span>
+                <span className="dot dot3"></span>
+                <span className="dot dot4"></span>
+                <span>Logging in</span>
+              </div>
+            ) : 'Login'}
           </button>
         </form>
         <p className="forgot-password">

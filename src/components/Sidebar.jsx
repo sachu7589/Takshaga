@@ -1,8 +1,41 @@
 // Sidebar Component
-import { NavLink } from "react-router-dom";
-import { Home, LogOut, Database , Users, Package, BookOpen, BadgeIndianRupee, CreditCard, ChartNoAxesCombined, SlidersHorizontal } from "lucide-react";
+import { NavLink, useNavigate } from "react-router-dom";
+import { Home, LogOut, Database, Users, Package, BookOpen, BadgeIndianRupee, CreditCard, ChartNoAxesCombined, SlidersHorizontal } from "lucide-react";
+import Swal from 'sweetalert2';
 
 const Sidebar = ({ isOpen }) => {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: "You want to logout?",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, logout!'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        // Clear session storage
+        sessionStorage.clear();
+        
+        // Show toast notification instead of modal
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: 'Logged out successfully!',
+          showConfirmButton: false,
+          timer: 3000,
+          timerProgressBar: true
+        });
+        
+        // Navigate to login page immediately
+        navigate('/');
+      }
+    });
+  };
 
   return (
     <div className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
@@ -42,7 +75,7 @@ const Sidebar = ({ isOpen }) => {
               }
             >
               <Package size={20} />
-              Product
+              Materials
             </NavLink>
           </li>
           <li>
@@ -105,6 +138,7 @@ const Sidebar = ({ isOpen }) => {
       <div className="logout-section">
         <button
           className="logout-button"
+          onClick={handleLogout}
         >
           <LogOut size={20} />
           Logout
