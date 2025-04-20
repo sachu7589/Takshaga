@@ -14,6 +14,8 @@ import Estimate_Generation from './pages/Estimate_Generation'
 import Register from './pages/Register'
 import ClientDetails from './pages/ClientDetails'
 import ClientManage from './pages/ClientManage'
+import EstimateGenerationClient from './pages/EstimateGenerationClient'
+import EstimatePreview from './pages/EstimatePreview'
 
 function App() {
   return (
@@ -32,8 +34,10 @@ function App() {
         <Route path='/report' element={<Report/>}/>
         <Route path='/preset' element={<Preset/>}/>
         <Route path='/estimate_generation' element={<Estimate_Generation/>}/>
+        <Route path='/estimateGenerationClient/:id' element={<EstimateGenerationClient/>}/>
         <Route path='/register' element={<Register/>}/>
         <Route path='/client-details/:id' element={<ClientDetails/>}/>
+        <Route path='/estimatePreview/:id' element={<EstimatePreview/>}/>
       </Routes>
     </BrowserRouter>
   )

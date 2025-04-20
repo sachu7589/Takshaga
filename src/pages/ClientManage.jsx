@@ -26,8 +26,8 @@ function ClientManage() {
       setIsLoading(true);
       const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/clients/display`);
       if (response.data) {
-        // Filter clients to only show those with completed 0
-        const filteredClients = response.data.filter(client => client.completed === 0);
+        // Filter clients to show those with completed 0 AND status 1
+        const filteredClients = response.data.filter(client => client.completed === 0 && client.status === 1);
         setClients(filteredClients);
       }
     } catch (error) {

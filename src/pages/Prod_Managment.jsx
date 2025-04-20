@@ -13,8 +13,8 @@ function Prod_Managment() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [materials, setMaterials] = useState([]);
-  const [currentMaterial, setCurrentMaterial] = useState({ id: 0, name: "", price: 0, category: "" });
-  const [newMaterial, setNewMaterial] = useState({ name: "", price: 0, category: "" });
+  const [currentMaterial, setCurrentMaterial] = useState({ id: 0, name: "", price: 0, category: "", measurementType: "pieces" });
+  const [newMaterial, setNewMaterial] = useState({ name: "", price: 0, category: "", measurementType: "pieces" });
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -74,12 +74,13 @@ function Prod_Managment() {
       const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/materials/insert`, {
         name: newMaterial.name,
         price: newMaterial.price,
-        category: newMaterial.category
+        category: newMaterial.category,
+        measurementType: newMaterial.measurementType
       });
 
       if (response.data) {
         setMaterials([...materials, response.data]);
-        setNewMaterial({ name: "", price: 0, category: "" });
+        setNewMaterial({ name: "", price: 0, category: "", measurementType: "pieces" });
         setShowAddModal(false);
         Swal.fire({
           icon: 'success',
@@ -110,7 +111,8 @@ function Prod_Managment() {
         {
           name: currentMaterial.name,
           price: currentMaterial.price,
-          category: currentMaterial.category
+          category: currentMaterial.category,
+          measurementType: currentMaterial.measurementType
         }
       );
 
@@ -176,7 +178,8 @@ function Prod_Managment() {
       _id: material._id,
       name: material.name,
       price: material.price,
-      category: material.category
+      category: material.category,
+      measurementType: material.measurementType || "pieces"
     });
     setShowEditModal(true);
   };
@@ -265,6 +268,29 @@ function Prod_Managment() {
                   />
                 </div>
                 <div className="form-group">
+                  <label>Measurement Type</label>
+                  <div className="radio-group">
+                    <label>
+                      <input
+                        type="radio"
+                        value="pieces"
+                        checked={newMaterial.measurementType === "pieces"}
+                        onChange={(e) => setNewMaterial({...newMaterial, measurementType: e.target.value})}
+                      />
+                      Pieces
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        value="area"
+                        checked={newMaterial.measurementType === "area"}
+                        onChange={(e) => setNewMaterial({...newMaterial, measurementType: e.target.value})}
+                      />
+                      Area
+                    </label>
+                  </div>
+                </div>
+                <div className="form-group">
                   <label>Category</label>
                   <select
                     className="category-select"
@@ -318,6 +344,29 @@ function Prod_Managment() {
                     value={currentMaterial.price}
                     onChange={(e) => setCurrentMaterial({...currentMaterial, price: parseFloat(e.target.value)})}
                   />
+                </div>
+                <div className="form-group">
+                  <label>Measurement Type</label>
+                  <div className="radio-group">
+                    <label>
+                      <input
+                        type="radio"
+                        value="pieces"
+                        checked={currentMaterial.measurementType === "pieces"}
+                        onChange={(e) => setCurrentMaterial({...currentMaterial, measurementType: e.target.value})}
+                      />
+                      Pieces
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        value="area"
+                        checked={currentMaterial.measurementType === "area"}
+                        onChange={(e) => setCurrentMaterial({...currentMaterial, measurementType: e.target.value})}
+                      />
+                      Area
+                    </label>
+                  </div>
                 </div>
                 <div className="form-group">
                   <label>Category</label>
