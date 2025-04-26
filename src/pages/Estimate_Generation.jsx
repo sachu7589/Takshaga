@@ -150,19 +150,7 @@ const StyledComponent = styled.div`
 function Estimate_Generation() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [showRunningSqFeetForm, setShowRunningSqFeetForm] = useState(false);
-  const [runningSqFeetData, setRunningSqFeetData] = useState([{
-    category: "",
-    subCategories: [{
-      name: "",
-      materials: [{
-        name: "",
-        lengthInCm: 0,
-        unitPricePerFeet: 0,
-        totalAmount: 0
-      }]
-    }]
-  }]);
+  const [runningSqFeetData, setRunningSqFeetData] = useState([]);
   const [clientName, setClientName] = useState("");
   const [clientAddress, setClientAddress] = useState("");
   const [categories, setCategories] = useState([{
@@ -894,6 +882,27 @@ function Estimate_Generation() {
     setRunningSqFeetData(updatedData);
   };
 
+  const addNewRunningSqFeetCategory = () => {
+    setRunningSqFeetData([...runningSqFeetData, {
+      category: "",
+      subCategories: [{
+        name: "",
+        materials: [{
+          name: "",
+          lengthInCm: 0,
+          unitPricePerFeet: 0,
+          totalAmount: 0
+        }]
+      }]
+    }]);
+  };
+
+  const removeRunningSqFeetCategory = (index) => {
+    const updatedData = [...runningSqFeetData];
+    updatedData.splice(index, 1);
+    setRunningSqFeetData(updatedData);
+  };
+
   // Animation variants
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -1294,7 +1303,7 @@ function Estimate_Generation() {
                 ))}
 
                 {/* Running Sq Feet Section */}
-                {showRunningSqFeetForm && runningSqFeetData.map((category, categoryIndex) => (
+                {runningSqFeetData.length > 0 && runningSqFeetData.map((category, categoryIndex) => (
                   <CategoryCard
                     key={categoryIndex}
                     variants={itemVariants}
@@ -1310,21 +1319,7 @@ function Estimate_Generation() {
                       <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px'}}>
                         <h3 style={{color: '#3b82f6'}}>Running Sq Feet Category {categoryIndex + 1}</h3>
                         <button
-                          onClick={() => {
-                            setShowRunningSqFeetForm(false);
-                            setRunningSqFeetData([{
-                              category: "",
-                              subCategories: [{
-                                name: "",
-                                materials: [{
-                                  name: "",
-                                  lengthInCm: 0,
-                                  unitPricePerFeet: 0,
-                                  totalAmount: 0
-                                }]
-                              }]
-                            }]);
-                          }}
+                          onClick={() => removeRunningSqFeetCategory(categoryIndex)}
                           style={{
                             backgroundColor: '#ef4444',
                             color: 'white',
@@ -1533,21 +1528,7 @@ function Estimate_Generation() {
                       Add Category
                     </StyledButton>
                     <StyledButton
-                      onClick={() => {
-                        setShowRunningSqFeetForm(true);
-                        setRunningSqFeetData([{
-                          category: "",
-                          subCategories: [{
-                            name: "",
-                            materials: [{
-                              name: "",
-                              lengthInCm: 0,
-                              unitPricePerFeet: 0,
-                              totalAmount: 0
-                            }]
-                          }]
-                        }]);
-                      }}
+                      onClick={addNewRunningSqFeetCategory}
                       variant="primary"
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
