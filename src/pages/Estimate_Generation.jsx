@@ -1,6 +1,5 @@
 import { useState } from "react";
 import Sidebar from "../components/Sidebar";
-import TopNavbar from "../components/Topbar";
 import "../assets/styles/Estimate.css";
 import { Edit, Trash2, FileDown, Eye, Send, User, Folder, List, Plus} from "lucide-react";
 
@@ -151,6 +150,19 @@ const StyledComponent = styled.div`
 function Estimate_Generation() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showRunningSqFeetForm, setShowRunningSqFeetForm] = useState(false);
+  const [runningSqFeetData, setRunningSqFeetData] = useState([{
+    category: "",
+    subCategories: [{
+      name: "",
+      materials: [{
+        name: "",
+        lengthInCm: 0,
+        unitPricePerFeet: 0,
+        totalAmount: 0
+      }]
+    }]
+  }]);
   const [clientName, setClientName] = useState("");
   const [clientAddress, setClientAddress] = useState("");
   const [categories, setCategories] = useState([{
@@ -244,6 +256,32 @@ function Estimate_Generation() {
     }]);
   };
 
+  const calculateGrandTotal = () => {
+    let total = 0;
+    
+    // Calculate total from regular categories
+    total += categories.reduce((categoryTotal, category) => {
+      return categoryTotal + category.subCategories.reduce((subCategoryTotal, subCategory) => {
+        return subCategoryTotal + subCategory.materials.reduce((materialTotal, material) => {
+          const area = calculateArea(material.length, material.breadth);
+          return materialTotal + calculateTotal(area, material.quantity, material.unitPrice);
+        }, 0);
+      }, 0);
+    }, 0);
+
+    // Calculate total from running sq feet categories
+    total += runningSqFeetData.reduce((categoryTotal, category) => {
+      return categoryTotal + category.subCategories.reduce((subCategoryTotal, subCategory) => {
+        return subCategoryTotal + subCategory.materials.reduce((materialTotal, material) => {
+          const { totalAmount } = calculateRunningSqFeet(material.lengthInCm, material.unitPricePerFeet);
+          return materialTotal + totalAmount;
+        }, 0);
+      }, 0);
+    }, 0);
+
+    return total;
+  };
+
   const handleDownloadPDF = () => {
     try {
       // Validate client details
@@ -280,6 +318,31 @@ function Estimate_Generation() {
             }
             if (material.unitPrice <= 0) {
               throw new Error("Unit price must be greater than 0");
+            }
+          }
+        }
+      }
+
+      // Validate running sq feet data
+      for (const category of runningSqFeetData) {
+        if (!category.category.trim()) {
+          throw new Error("Running Sq Feet category name is required");
+        }
+        
+        for (const subCategory of category.subCategories) {
+          if (!subCategory.name.trim()) {
+            throw new Error("Running Sq Feet sub category name is required");
+          }
+          
+          for (const material of subCategory.materials) {
+            if (!material.name.trim()) {
+              throw new Error("Running Sq Feet material name is required");
+            }
+            if (material.lengthInCm <= 0) {
+              throw new Error("Length must be greater than 0");
+            }
+            if (material.unitPricePerFeet <= 0) {
+              throw new Error("Unit price per feet must be greater than 0");
             }
           }
         }
@@ -325,6 +388,7 @@ function Estimate_Generation() {
       let yPos = 110;
       let currentPage = 1;
       
+      // Add regular categories
       categories.forEach((category) => {
         // Check if we need a new page
         if (yPos > 250) {
@@ -371,6 +435,70 @@ function Estimate_Generation() {
           autoTable(doc, {
             startY: yPos + 5,
             head: [['Material', 'Dimensions', 'Area', 'Quantity', 'Unit Price', 'Total']],
+            body: tableData,
+            theme: 'grid',
+            headStyles: { fillColor: [248, 250, 252], textColor: [0, 0, 0] },
+            styles: { fontSize: 8 },
+            pageBreak: 'auto',
+            didDrawPage: function(data) {
+              // Add border to new pages created by autoTable
+              if (data.pageNumber > currentPage) {
+                currentPage = data.pageNumber;
+                doc.rect(5, 5, 200, 287);
+              }
+            }
+          });
+          
+          yPos = doc.lastAutoTable.finalY + 15;
+        });
+      });
+
+      // Add running sq feet categories
+      runningSqFeetData.forEach((category) => {
+        // Check if we need a new page
+        if (yPos > 250) {
+          doc.addPage();
+          currentPage++;
+          doc.rect(5, 5, 200, 287); // Add border to new page
+          yPos = 30; // Start from top on new pages
+        }
+
+        // Add category details
+        doc.setFontSize(12);
+        doc.setTextColor(30, 41, 59);
+        doc.text(`${category.category} (Running Sq Feet)`, 20, yPos);
+        
+        yPos += 10;
+        
+        category.subCategories.forEach((subCategory) => {
+          // Check if we need a new page
+          if (yPos > 250) {
+            doc.addPage();
+            currentPage++;
+            doc.rect(5, 5, 200, 287); // Add border to new page
+            yPos = 30; // Start from top on new pages
+          }
+
+          doc.setFontSize(10);
+          doc.setTextColor(100, 116, 139);
+          doc.text(`${subCategory.name}`, 20, yPos);
+          
+          // Add materials table
+          const tableData = subCategory.materials.map(material => {
+            const { lengthInFeet, totalAmount } = calculateRunningSqFeet(material.lengthInCm, material.unitPricePerFeet);
+            return [
+              material.name,
+              `${material.lengthInCm} cm (${lengthInFeet.toFixed(2)} ft)`,
+              '-',
+              '1',
+              `Rs. ${material.unitPricePerFeet}/ft`,
+              `Rs. ${totalAmount.toFixed(2)}`
+            ];
+          });
+
+          autoTable(doc, {
+            startY: yPos + 5,
+            head: [['Material', 'Length', 'Area', 'Quantity', 'Unit Price', 'Total']],
             body: tableData,
             theme: 'grid',
             headStyles: { fillColor: [248, 250, 252], textColor: [0, 0, 0] },
@@ -488,6 +616,7 @@ function Estimate_Generation() {
       let yPos = 110;
       let currentPage = 1;
       
+      // Add regular categories
       categories.forEach((category) => {
         // Check if we need a new page
         if (yPos > 250) {
@@ -534,6 +663,70 @@ function Estimate_Generation() {
           autoTable(doc, {
             startY: yPos + 5,
             head: [['Material', 'Dimensions', 'Area', 'Quantity', 'Unit Price', 'Total']],
+            body: tableData,
+            theme: 'grid',
+            headStyles: { fillColor: [248, 250, 252], textColor: [0, 0, 0] },
+            styles: { fontSize: 8 },
+            pageBreak: 'auto',
+            didDrawPage: function(data) {
+              // Add border to new pages created by autoTable
+              if (data.pageNumber > currentPage) {
+                currentPage = data.pageNumber;
+                doc.rect(5, 5, 200, 287);
+              }
+            }
+          });
+          
+          yPos = doc.lastAutoTable.finalY + 15;
+        });
+      });
+
+      // Add running sq feet categories
+      runningSqFeetData.forEach((category) => {
+        // Check if we need a new page
+        if (yPos > 250) {
+          doc.addPage();
+          currentPage++;
+          doc.rect(5, 5, 200, 287); // Add border to new page
+          yPos = 30; // Start from top on new pages
+        }
+
+        // Add category details
+        doc.setFontSize(12);
+        doc.setTextColor(30, 41, 59);
+        doc.text(`${category.category} (Running Sq Feet)`, 20, yPos);
+        
+        yPos += 10;
+        
+        category.subCategories.forEach((subCategory) => {
+          // Check if we need a new page
+          if (yPos > 250) {
+            doc.addPage();
+            currentPage++;
+            doc.rect(5, 5, 200, 287); // Add border to new page
+            yPos = 30; // Start from top on new pages
+          }
+
+          doc.setFontSize(10);
+          doc.setTextColor(100, 116, 139);
+          doc.text(`${subCategory.name}`, 20, yPos);
+          
+          // Add materials table
+          const tableData = subCategory.materials.map(material => {
+            const { lengthInFeet, totalAmount } = calculateRunningSqFeet(material.lengthInCm, material.unitPricePerFeet);
+            return [
+              material.name,
+              `${material.lengthInCm} cm (${lengthInFeet.toFixed(2)} ft)`,
+              '-',
+              '1',
+              `Rs. ${material.unitPricePerFeet}/ft`,
+              `Rs. ${totalAmount.toFixed(2)}`
+            ];
+          });
+
+          autoTable(doc, {
+            startY: yPos + 5,
+            head: [['Material', 'Length', 'Area', 'Quantity', 'Unit Price', 'Total']],
             body: tableData,
             theme: 'grid',
             headStyles: { fillColor: [248, 250, 252], textColor: [0, 0, 0] },
@@ -637,15 +830,68 @@ function Estimate_Generation() {
     }
   };
 
-  const calculateGrandTotal = () => {
-    return categories.reduce((categoryTotal, category) => {
-      return categoryTotal + category.subCategories.reduce((subCategoryTotal, subCategory) => {
-        return subCategoryTotal + subCategory.materials.reduce((materialTotal, material) => {
-          const area = calculateArea(material.length, material.breadth);
-          return materialTotal + calculateTotal(area, material.quantity, material.unitPrice);
-        }, 0);
-      }, 0);
-    }, 0);
+  const calculateRunningSqFeet = (lengthInCm, unitPricePerFeet) => {
+    const lengthInFeet = lengthInCm / 30.48; // Convert cm to feet
+    const totalAmount = lengthInFeet * unitPricePerFeet;
+    return { lengthInFeet, totalAmount };
+  };
+
+  const handleRunningSqFeetCategoryChange = (categoryIndex, value) => {
+    const updatedData = [...runningSqFeetData];
+    updatedData[categoryIndex].category = value;
+    setRunningSqFeetData(updatedData);
+  };
+
+  const handleRunningSqFeetSubCategoryChange = (categoryIndex, subCategoryIndex, value) => {
+    const updatedData = [...runningSqFeetData];
+    updatedData[categoryIndex].subCategories[subCategoryIndex].name = value;
+    setRunningSqFeetData(updatedData);
+  };
+
+  const handleRunningSqFeetMaterialChange = (categoryIndex, subCategoryIndex, materialIndex, field, value) => {
+    const updatedData = [...runningSqFeetData];
+    if (field === 'lengthInCm' || field === 'unitPricePerFeet') {
+      const { totalAmount } = calculateRunningSqFeet(
+        field === 'lengthInCm' ? value : updatedData[categoryIndex].subCategories[subCategoryIndex].materials[materialIndex].lengthInCm,
+        field === 'unitPricePerFeet' ? value : updatedData[categoryIndex].subCategories[subCategoryIndex].materials[materialIndex].unitPricePerFeet
+      );
+      updatedData[categoryIndex].subCategories[subCategoryIndex].materials[materialIndex] = {
+        ...updatedData[categoryIndex].subCategories[subCategoryIndex].materials[materialIndex],
+        [field]: value,
+        totalAmount
+      };
+    } else {
+      updatedData[categoryIndex].subCategories[subCategoryIndex].materials[materialIndex] = {
+        ...updatedData[categoryIndex].subCategories[subCategoryIndex].materials[materialIndex],
+        [field]: value
+      };
+    }
+    setRunningSqFeetData(updatedData);
+  };
+
+  const addNewRunningSqFeetMaterial = (categoryIndex, subCategoryIndex) => {
+    const updatedData = [...runningSqFeetData];
+    updatedData[categoryIndex].subCategories[subCategoryIndex].materials.push({
+      name: "",
+      lengthInCm: 0,
+      unitPricePerFeet: 0,
+      totalAmount: 0
+    });
+    setRunningSqFeetData(updatedData);
+  };
+
+  const addNewRunningSqFeetSubCategory = (categoryIndex) => {
+    const updatedData = [...runningSqFeetData];
+    updatedData[categoryIndex].subCategories.push({
+      name: "",
+      materials: [{
+        name: "",
+        lengthInCm: 0,
+        unitPricePerFeet: 0,
+        totalAmount: 0
+      }]
+    });
+    setRunningSqFeetData(updatedData);
   };
 
   // Animation variants
@@ -768,6 +1014,7 @@ function Estimate_Generation() {
                   </motion.div>
                 </CategoryCard>
 
+                {/* Regular Categories */}
                 {categories.map((category, categoryIndex) => (
                   <CategoryCard
                     key={categoryIndex}
@@ -1046,33 +1293,278 @@ function Estimate_Generation() {
                   </CategoryCard>
                 ))}
 
-                <motion.div 
-                  className="button-group"
-                  style={{
-                    display: 'flex',
-                    gap: '1rem',
-                    marginTop: '2rem',
-                    justifyContent: 'flex-end'
-                  }}
-                >
-                  <StyledButton
-                    onClick={addNewCategory}
-                    variant="primary"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                {/* Running Sq Feet Section */}
+                {showRunningSqFeetForm && runningSqFeetData.map((category, categoryIndex) => (
+                  <CategoryCard
+                    key={categoryIndex}
+                    variants={itemVariants}
                   >
-                    <Plus size={18} />
-                    Add Category
-                  </StyledButton>
-                  <StyledButton
-                    onClick={() => setShowPreview(true)}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                    <motion.div 
+                      className="category-section"
+                      style={{
+                        background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                        padding: '2rem',
+                        borderRadius: '15px'
+                      }}
+                    >
+                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px'}}>
+                        <h3 style={{color: '#3b82f6'}}>Running Sq Feet Category {categoryIndex + 1}</h3>
+                        <button
+                          onClick={() => {
+                            setShowRunningSqFeetForm(false);
+                            setRunningSqFeetData([{
+                              category: "",
+                              subCategories: [{
+                                name: "",
+                                materials: [{
+                                  name: "",
+                                  lengthInCm: 0,
+                                  unitPricePerFeet: 0,
+                                  totalAmount: 0
+                                }]
+                              }]
+                            }]);
+                          }}
+                          style={{
+                            backgroundColor: '#ef4444',
+                            color: 'white',
+                            padding: '8px 15px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Remove Category
+                        </button>
+                      </div>
+
+                      <div className="form-group" style={{marginBottom: '25px'}}>
+                        <label style={{display: 'block', marginBottom: '8px', color: '#1e293b', fontWeight: '500'}}>
+                          Category Name
+                        </label>
+                        <input
+                          type="text"
+                          value={category.category}
+                          onChange={(e) => handleRunningSqFeetCategoryChange(categoryIndex, e.target.value)}
+                          placeholder="Enter category name"
+                          style={{
+                            padding: '10px',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '6px',
+                            width: '100%',
+                            fontSize: '16px',
+                            color: '#1e293b',
+                            backgroundColor: '#fff'
+                          }}
+                        />
+                      </div>
+
+                      {category.subCategories.map((subCategory, subCategoryIndex) => (
+                        <div key={subCategoryIndex} className="subcategory-section" style={{
+                          backgroundColor: '#f8fafc',
+                          padding: '20px',
+                          borderRadius: '8px',
+                          marginBottom: '20px'
+                        }}>
+                          <h4 style={{color: '#64748b', marginBottom: '20px'}}>Sub Category {subCategoryIndex + 1}</h4>
+
+                          <div className="form-group" style={{marginBottom: '20px'}}>
+                            <label style={{display: 'block', marginBottom: '8px', color: '#1e293b', fontWeight: '500'}}>
+                              Sub Category Name
+                            </label>
+                            <input
+                              type="text"
+                              value={subCategory.name}
+                              onChange={(e) => handleRunningSqFeetSubCategoryChange(categoryIndex, subCategoryIndex, e.target.value)}
+                              placeholder="Enter sub category name"
+                              style={{
+                                padding: '10px',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '6px',
+                                width: '100%',
+                                fontSize: '16px',
+                                color: '#1e293b',
+                                backgroundColor: '#fff'
+                              }}
+                            />
+                          </div>
+
+                          {subCategory.materials.map((material, materialIndex) => (
+                            <div key={materialIndex} className="material-section" style={{
+                              backgroundColor: '#fff',
+                              padding: '20px',
+                              borderRadius: '8px',
+                              marginBottom: '20px'
+                            }}>
+                              <h5 style={{color: '#64748b', marginBottom: '20px'}}>Material {materialIndex + 1}</h5>
+
+                              <div className="form-group" style={{marginBottom: '20px'}}>
+                                <label style={{display: 'block', marginBottom: '8px', color: '#1e293b', fontWeight: '500'}}>
+                                  Material Name
+                                </label>
+                                <input
+                                  type="text"
+                                  value={material.name}
+                                  onChange={(e) => handleRunningSqFeetMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'name', e.target.value)}
+                                  placeholder="Enter material name"
+                                  style={{
+                                    padding: '10px',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '6px',
+                                    width: '100%',
+                                    fontSize: '16px',
+                                    color: '#1e293b',
+                                    backgroundColor: '#fff'
+                                  }}
+                                />
+                              </div>
+
+                              <div className="dimensions" style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
+                                <div style={{flex: 1}}>
+                                  <label style={{display: 'block', marginBottom: '8px', color: '#1e293b', fontWeight: '500'}}>
+                                    Length (in cm)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={material.lengthInCm}
+                                    onChange={(e) => handleRunningSqFeetMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'lengthInCm', parseFloat(e.target.value))}
+                                    placeholder="Enter length in cm"
+                                    style={{
+                                      padding: '10px',
+                                      border: '1px solid #cbd5e1',
+                                      borderRadius: '6px',
+                                      width: '100%',
+                                      fontSize: '16px',
+                                      color: '#1e293b',
+                                      backgroundColor: '#fff'
+                                    }}
+                                  />
+                                </div>
+                                <div style={{flex: 1}}>
+                                  <label style={{display: 'block', marginBottom: '8px', color: '#1e293b', fontWeight: '500'}}>
+                                    Unit Price (Rs. per feet)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={material.unitPricePerFeet}
+                                    onChange={(e) => handleRunningSqFeetMaterialChange(categoryIndex, subCategoryIndex, materialIndex, 'unitPricePerFeet', parseFloat(e.target.value))}
+                                    placeholder="Enter unit price per feet"
+                                    style={{
+                                      padding: '10px',
+                                      border: '1px solid #cbd5e1',
+                                      borderRadius: '6px',
+                                      width: '100%',
+                                      fontSize: '16px',
+                                      color: '#1e293b',
+                                      backgroundColor: '#fff'
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="calculations" style={{
+                                backgroundColor: '#f8fafc',
+                                padding: '15px',
+                                borderRadius: '6px',
+                                marginBottom: '15px'
+                              }}>
+                                <p style={{color: '#64748b', marginBottom: '10px'}}>
+                                  Length in feet: {(material.lengthInCm / 30.48).toFixed(2)} ft
+                                </p>
+                                <p style={{color: '#64748b', fontWeight: 'bold'}}>
+                                  Total Amount: Rs. {material.totalAmount.toFixed(2)}
+                                </p>
+                              </div>
+
+                              <button
+                                onClick={() => addNewRunningSqFeetMaterial(categoryIndex, subCategoryIndex)}
+                                style={{
+                                  backgroundColor: '#3b82f6',
+                                  color: 'white',
+                                  padding: '8px 15px',
+                                  borderRadius: '6px',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  marginTop: '10px'
+                                }}
+                              >
+                                Add Another Material
+                              </button>
+                            </div>
+                          ))}
+
+                          <button
+                            onClick={() => addNewRunningSqFeetSubCategory(categoryIndex)}
+                            style={{
+                              backgroundColor: '#3b82f6',
+                              color: 'white',
+                              padding: '8px 15px',
+                              borderRadius: '6px',
+                              border: 'none',
+                              cursor: 'pointer',
+                              marginTop: '10px'
+                            }}
+                          >
+                            Add Another Sub Category
+                          </button>
+                        </div>
+                      ))}
+                    </motion.div>
+                  </CategoryCard>
+                ))}
+
+                {/* Action Buttons - Moved to the bottom */}
+                <div style={{ marginTop: '2rem', paddingTop: '2rem', borderTop: '1px solid #e2e8f0' }}>
+                  <motion.div 
+                    className="button-group"
+                    style={{
+                      display: 'flex',
+                      gap: '1rem',
+                      justifyContent: 'flex-end'
+                    }}
                   >
-                    <Eye size={18} />
-                    Preview
-                  </StyledButton>
-                </motion.div>
+                    <StyledButton
+                      onClick={addNewCategory}
+                      variant="primary"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <Plus size={18} />
+                      Add Category
+                    </StyledButton>
+                    <StyledButton
+                      onClick={() => {
+                        setShowRunningSqFeetForm(true);
+                        setRunningSqFeetData([{
+                          category: "",
+                          subCategories: [{
+                            name: "",
+                            materials: [{
+                              name: "",
+                              lengthInCm: 0,
+                              unitPricePerFeet: 0,
+                              totalAmount: 0
+                            }]
+                          }]
+                        }]);
+                      }}
+                      variant="primary"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <Plus size={18} />
+                      Add Running Sq Feet
+                    </StyledButton>
+                    <StyledButton
+                      onClick={() => setShowPreview(true)}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <Eye size={18} />
+                      Preview
+                    </StyledButton>
+                  </motion.div>
+                </div>
               </motion.div>
             ) : (
               <motion.div 
@@ -1099,6 +1591,7 @@ function Estimate_Generation() {
                   <p style={{color: '#64748b', marginBottom: '20px'}}><strong>Address:</strong> {clientAddress}</p>
                 </div>
 
+                {/* Regular Categories Preview */}
                 {categories.map((category, categoryIndex) => (
                   <div key={categoryIndex} style={{marginBottom: '40px'}}>
                     <h3 style={{color: '#1e293b', marginBottom: '15px'}}>{category.category}</h3>
@@ -1134,6 +1627,51 @@ function Estimate_Generation() {
                                   <td style={{padding: '12px'}}>{material.quantity}</td>
                                   <td style={{padding: '12px'}}>Rs. {material.unitPrice}</td>
                                   <td style={{padding: '12px'}}>Rs. {total.toFixed(2)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+
+                {/* Running Sq Feet Categories Preview */}
+                {runningSqFeetData.map((category, categoryIndex) => (
+                  <div key={categoryIndex} style={{marginBottom: '40px'}}>
+                    <h3 style={{color: '#1e293b', marginBottom: '15px'}}>{category.category} (Running Sq Feet)</h3>
+                    
+                    {category.subCategories.map((subCategory, subCategoryIndex) => (
+                      <div key={subCategoryIndex} style={{marginBottom: '30px'}}>
+                        <h4 style={{color: '#64748b', marginBottom: '20px'}}>{subCategory.name}</h4>
+
+                        <table className="preview-table" style={{
+                          width: '100%',
+                          borderCollapse: 'collapse',
+                          marginBottom: '30px'
+                        }}>
+                          <thead>
+                            <tr style={{backgroundColor: '#f8fafc'}}>
+                              <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Material</th>
+                              <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Length</th>
+                              <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Area</th>
+                              <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Quantity</th>
+                              <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Unit Price</th>
+                              <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {subCategory.materials.map((material, materialIndex) => {
+                              const { lengthInFeet, totalAmount } = calculateRunningSqFeet(material.lengthInCm, material.unitPricePerFeet);
+                              return (
+                                <tr key={materialIndex} style={{borderBottom: '1px solid #e2e8f0'}}>
+                                  <td style={{padding: '12px'}}>{material.name}</td>
+                                  <td style={{padding: '12px'}}>{`${material.lengthInCm} cm (${lengthInFeet.toFixed(2)} ft)`}</td>
+                                  <td style={{padding: '12px'}}>-</td>
+                                  <td style={{padding: '12px'}}>1</td>
+                                  <td style={{padding: '12px'}}>Rs. {material.unitPricePerFeet}/ft</td>
+                                  <td style={{padding: '12px'}}>Rs. {totalAmount.toFixed(2)}</td>
                                 </tr>
                               );
                             })}
