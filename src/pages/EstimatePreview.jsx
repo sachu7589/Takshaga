@@ -100,6 +100,7 @@ function EstimatePreview() {
   const [useCustomTotal, setUseCustomTotal] = useState(false);
   const [subTotal, setSubTotal] = useState(0);
   const [showAllDiscounts, setShowAllDiscounts] = useState(false);
+  const [customPaymentTerms, setCustomPaymentTerms] = useState('');
 
   useEffect(() => {
     const fetchEstimate = async () => {
@@ -447,6 +448,19 @@ function EstimatePreview() {
       doc.text("* Balance 25% of the total amount after completing shutter works", 25, yPos);
       yPos += 5;
       doc.text("* Additional work and area are calculated separately", 25, yPos);
+      
+      // Add custom payment terms if they exist
+      if (customPaymentTerms.trim()) {
+        yPos += 5; // Add a single line break before custom terms
+        doc.setFontSize(8);
+        
+        // Split the custom terms into lines that fit within the page width
+        const customTermsLines = doc.splitTextToSize(customPaymentTerms, 170);
+        customTermsLines.forEach(line => {
+          doc.text(`* ${line}`, 25, yPos);
+          yPos += 5;
+        });
+      }
       
       // Add footer
       yPos += 15;
@@ -1048,6 +1062,25 @@ function EstimatePreview() {
                     <span className="term-bullet">•</span>
                     <span>Extra work costs extra</span>
                   </div>
+                </div>
+                <div style={{ marginTop: '20px' }}>
+                  <h4 style={{ color: '#1e293b', marginBottom: '10px' }}>Custom Terms</h4>
+                  <textarea
+                    value={customPaymentTerms}
+                    onChange={(e) => setCustomPaymentTerms(e.target.value)}
+                    placeholder="Enter custom terms here..."
+                    style={{
+                      width: '100%',
+                      minHeight: '100px',
+                      padding: '10px',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '8px',
+                      resize: 'vertical',
+                      fontFamily: 'inherit',
+                      fontSize: '14px',
+                      color: '#1e293b'
+                    }}
+                  />
                 </div>
               </div>
 
