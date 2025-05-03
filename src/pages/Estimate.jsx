@@ -1,6 +1,5 @@
 import { useState } from "react";
 import Sidebar from "../components/Sidebar";
-import TopNavbar from "../components/Topbar";
 import "../assets/styles/Client.css";
 import { Cog, PlusCircle } from "lucide-react";
 import {Link} from "react-router-dom";

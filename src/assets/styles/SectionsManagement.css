@@ -1,0 +1,342 @@
+/* Sections Management Styles */
+.dashboard-content {
+    flex: 1;
+    padding: 2rem;
+    transition: margin-left 0.3s ease;
+    margin-top: 80px;
+}
+
+.sections-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding: 0 1rem;
+}
+
+.sections-header h2 {
+    font-size: 1.8rem;
+    color: #1e293b;
+    margin: 0;
+}
+
+.sections-add-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #22c55e;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.sections-add-btn:hover {
+    background: #16a34a;
+    transform: translateY(-2px);
+}
+
+.sections-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 2rem;
+    padding: 1.5rem;
+}
+
+.section-item-card {
+    background: white;
+    border-radius: 8px;
+    padding: 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    min-width: 400px;
+}
+
+.section-item-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.section-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.section-item-header h3 {
+    font-size: 1.75rem;
+    color: #1e293b;
+    margin: 0;
+    font-weight: 600;
+}
+
+.section-item-actions {
+    display: flex;
+    gap: 1.25rem;
+}
+
+.section-action-btn {
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    cursor: pointer;
+    color: #64748b;
+    font-size: 1.25rem;
+}
+
+.section-edit-btn:hover {
+    color: #3b82f6;
+}
+
+.section-delete-btn:hover {
+    color: #ef4444;
+}
+
+.section-item-description {
+    color: #64748b;
+    font-size: 1.1rem;
+    margin: 0 0 2rem 0;
+    line-height: 1.5;
+}
+
+.section-item-details {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-top: auto;
+}
+
+.section-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: #f8fafb;
+    padding: 1.25rem;
+    border-radius: 0.375rem;
+    border: 1px solid #f1f5f9;
+}
+
+.section-detail-label {
+    color: #64748b;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.section-detail-value {
+    color: #1e293b;
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+/* Modal Styles */
+.sections-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.sections-modal {
+    background: white;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.sections-modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sections-modal-header h3 {
+    font-size: 1.25rem;
+    color: #1e293b;
+    margin: 0;
+}
+
+.sections-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #64748b;
+}
+
+.sections-modal-body {
+    padding: 1.5rem;
+}
+
+.sections-form-group {
+    margin-bottom: 1rem;
+}
+
+.sections-form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.sections-form-group input,
+.sections-form-group select,
+.sections-form-group textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    color: #1e293b;
+}
+
+.sections-form-group input:focus,
+.sections-form-group select:focus,
+.sections-form-group textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.sections-radio-group {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 0.5rem;
+}
+
+.sections-radio-group label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+.sections-modal-footer {
+    padding: 1.5rem;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+.sections-btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.sections-btn-secondary {
+    background: #f1f5f9;
+    color: #1e293b;
+    border: 1px solid #e2e8f0;
+}
+
+.sections-btn-secondary:hover {
+    background: #e2e8f0;
+}
+
+.sections-btn-primary {
+    background: #3b82f6;
+    color: white;
+    border: none;
+}
+
+.sections-btn-primary:hover {
+    background: #2563eb;
+}
+
+.sections-btn-danger {
+    background: #ef4444;
+    color: white;
+    border: none;
+}
+
+.sections-btn-danger:hover {
+    background: #dc2626;
+}
+
+/* Loading State */
+.sections-loading-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+}
+
+.sections-loading-spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 3px solid #e2e8f0;
+    border-top: 3px solid #3b82f6;
+    border-radius: 50%;
+    animation: sections-spin 1s linear infinite;
+}
+
+@keyframes sections-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .dashboard-content {
+        padding: 1rem;
+        margin-top: 60px;
+    }
+
+    .sections-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+
+    .sections-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+        padding: 1rem;
+    }
+
+    .sections-modal {
+        margin: 1rem;
+    }
+
+    .section-item-card {
+        min-width: unset;
+    }
+    
+    .section-item-header h3 {
+        font-size: 1.25rem;
+    }
+    
+    .section-item-description {
+        font-size: 1rem;
+        margin: 0 0 1.5rem 0;
+    }
+    
+    .section-detail-value {
+        font-size: 1rem;
+    }
+} 

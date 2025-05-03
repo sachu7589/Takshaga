@@ -3,8 +3,9 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Client from './pages/Client'
 import Product from './pages/Product'
-import Prod_Managment from './pages/Prod_Managment'
 import Cat_Managment from './pages/Cat_Managment'
+import Subcat_Managment from './pages/Subcat_Managment'
+import Sections_Managment from './pages/Sections_Managment'
 import Estimate from './pages/Estimate'
 import Add_Income from './pages/Add_Income'
 import Expense from './pages/Expense'
@@ -26,8 +27,9 @@ function App() {
         <Route path="/client" element={<Client />} />
         <Route path="/client-manage" element={<ClientManage />} />
         <Route path='/product' element={<Product/>}/>
-        <Route path='/prod_Managment' element={<Prod_Managment/>}/>
         <Route path='/cat_Managment' element={<Cat_Managment/>}/>
+        <Route path='/subcat_Managment' element={<Subcat_Managment/>}/>
+        <Route path='/sections_Managment' element={<Sections_Managment/>}/>
         <Route path='/estimate' element={<Estimate/>}/>
         <Route path='/additional-income' element={<Add_Income/>}/>
         <Route path='/expense' element={<Expense/>}/>

@@ -75,7 +75,7 @@ const Sidebar = ({ isOpen }) => {
               }
             >
               <Package size={20} />
-              Materials
+              Sections
             </NavLink>
           </li>
           <li>
@@ -87,17 +87,6 @@ const Sidebar = ({ isOpen }) => {
             >
               <BookOpen size={20}/>
               Estimate
-            </NavLink>
-          </li>
-          <li>
-            <NavLink
-              to="/preset"
-              className={({ isActive }) =>
-                `nav-link ${isActive ? 'active' : ''}`
-              }
-            >
-              <SlidersHorizontal size={20} />
-              Preset
             </NavLink>
           </li>
           <li>
