@@ -86,6 +86,10 @@ const StyledButton = styled(motion.button)`
   }
 `;
 
+// Define constants
+const CM_TO_FT_CONVERSION = 0.0328084; // Conversion factor: 1 cm = 0.0328084 ft
+const CM2_TO_FT2_CONVERSION = 0.00107639; // Conversion factor: 1 cm² = 0.00107639 ft²
+
 function EstimatePreview() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -99,28 +103,53 @@ function EstimatePreview() {
   const [grandTotal, setGrandTotal] = useState(0);
   const [useCustomTotal, setUseCustomTotal] = useState(false);
   const [subTotal, setSubTotal] = useState(0);
-  const [showAllDiscounts, setShowAllDiscounts] = useState(false);
+
   const [customPaymentTerms, setCustomPaymentTerms] = useState('');
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [customItem, setCustomItem] = useState({
+    category: "",
+    subcategory: "",
+    material: "",
+    description: "",
+    price: "",
+    unitType: "pieces" // Default unit type
+  });
+  
+  // Add state for multiple measurements (for area unit type)
+  const [multipleMeasurements, setMultipleMeasurements] = useState({});
+  
+  // Add state for running feet measurements
+  const [runningLengths, setRunningLengths] = useState({});
 
   useEffect(() => {
     const fetchEstimate = async () => {
       try {
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/estimates/${id}`);
-        if (response.data.success) {
-          setEstimate(response.data.data);
-          setEditedEstimate(response.data.data);
-          setGrandTotal(response.data.data.grandTotal);
+        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/estimates/display/${id}`);
+        if (response.data) {
+          const estimateData = response.data;
+          setEstimate(estimateData);
+          setEditedEstimate(estimateData);
+          setGrandTotal(estimateData.grandTotal);
           
-          // Calculate subTotal from materials
-          const calculatedSubTotal = response.data.data.materials.reduce((total, material) => {
-            return total + parseFloat(material.total);
+          // Calculate subTotal from sections
+          const calculatedSubTotal = estimateData.sections.reduce((total, section) => {
+            return total + parseFloat(section.total || 0);
           }, 0);
           setSubTotal(calculatedSubTotal);
           
           // Calculate discount if subTotal and grandTotal are different
-          if (calculatedSubTotal !== response.data.data.grandTotal) {
+          if (calculatedSubTotal !== estimateData.grandTotal) {
             setShowDiscount(true);
-            setDiscountAmount((calculatedSubTotal - response.data.data.grandTotal).toFixed(2));
+            setDiscountAmount((calculatedSubTotal - estimateData.grandTotal).toFixed(2));
+          } else {
+            // Always set up the discount checkbox, but with 0 amount
+            setShowDiscount(true);
+            setDiscountAmount(0);
+          }
+          
+          // Set custom payment terms if available
+          if (estimateData.paymentTerms) {
+            setCustomPaymentTerms(estimateData.paymentTerms);
           }
         } else {
           throw new Error('Failed to fetch estimate');
@@ -149,34 +178,256 @@ function EstimatePreview() {
 
   const handleEdit = () => {
     setIsEditing(true);
+    
+    // Initialize measurements for sections with area or running sq ft type
+    if (editedEstimate && editedEstimate.sections) {
+      const areaInitializations = {};
+      const runningInitializations = {};
+      
+      editedEstimate.sections.forEach(section => {
+        const sectionId = section._id || section.id;
+        if (!sectionId) return; // Skip if no id
+        
+        const unitType = getSectionUnitType(section);
+        
+        // Initialize measurements for area sections
+        if (unitType === 'area') {
+          // If measurements exist in the database, use them
+          if (section.measurements && section.measurements.length > 0) {
+            // Use the first measurement as primary inputs
+            const primaryMeasurement = section.measurements[0];
+            if (primaryMeasurement) {
+              section.length = primaryMeasurement.length || '';
+              section.breadth = primaryMeasurement.breadth || '';
+            }
+            
+            // Add additional measurements (skip the first one as it's the primary)
+            if (section.measurements.length > 1) {
+              areaInitializations[sectionId] = section.measurements.slice(1).map(m => ({
+                length: m.length,
+                breadth: m.breadth,
+                area: m.area || (m.length * m.breadth * CM2_TO_FT2_CONVERSION).toFixed(2)
+              }));
+            }
+          }
+        }
+        
+        // Initialize running length sections
+        if (unitType === 'running_sqft') {
+          // If there are actual measurements stored, convert them to running lengths
+          if (section.measurements && section.measurements.length > 0) {
+            // Extract lengths from measurements
+            runningInitializations[sectionId] = section.measurements.map(m => ({
+              length: m.length.toString()
+            }));
+          } else if (section.runningLengths && section.runningLengths.length > 0) {
+            // If already has runningLengths property
+            runningInitializations[sectionId] = section.runningLengths;
+          } else if (section.quantity) {
+            // If no measurements but has quantity, create a single measurement
+            // that would approximate the same total
+            const totalCm = parseFloat(section.quantity) / CM_TO_FT_CONVERSION;
+            runningInitializations[sectionId] = [{ length: totalCm.toFixed(2) }];
+          } else {
+            // Default empty initialization
+            runningInitializations[sectionId] = [{ length: '' }];
+          }
+        }
+      });
+      
+      // Set initialized measurements
+      if (Object.keys(areaInitializations).length > 0) {
+        setMultipleMeasurements(areaInitializations);
+      }
+      
+      if (Object.keys(runningInitializations).length > 0) {
+        setRunningLengths(runningInitializations);
+      }
+    }
   };
 
   const handleSave = async () => {
     try {
-      // Calculate sub-total from materials
-      const calculatedSubTotal = editedEstimate.materials.reduce((total, material) => {
-        return total + parseFloat(material.total);
+      // Calculate sub-total from sections
+      const calculatedSubTotal = editedEstimate.sections.reduce((total, section) => {
+        return total + parseFloat(section.total || 0);
       }, 0);
 
+      // Apply ceiling to the grand total to match EstimateGenerationClient
+      const ceiledGrandTotal = Math.ceil(grandTotal);
+
+      // Prepare sections with measurements included
+      const sectionsWithMeasurements = editedEstimate.sections.map(section => {
+        const sectionId = section._id || section.id;
+        const unitType = getSectionUnitType(section);
+        
+        // Create a clean section object that matches the mongoose schema
+        const sectionCopy = {
+          // Only include _id if it's not a temporary client-side ID
+          ...(section._id && !section._id.toString().startsWith('custom_') ? { _id: section._id } : {}),
+          
+          // Required fields from schema
+          category: section.category || 'Uncategorized',
+          subcategory: section.subcategory || 'Other',
+          material: section.material || '',
+          description: section.description || '',
+          unitPrice: parseFloat(section.unitPrice) || 0,
+          quantity: parseFloat(section.quantity) || 0,
+          total: parseFloat(section.total) || 0
+        };
+        
+        // Handle area measurements
+        if (unitType === 'area') {
+          const allMeasurements = [];
+          
+          // Add primary measurement if it exists
+          const primaryLength = parseFloat(section.length) || 0;
+          const primaryBreadth = parseFloat(section.breadth) || 0;
+          
+          if (primaryLength > 0 && primaryBreadth > 0) {
+            allMeasurements.push({
+              length: primaryLength,
+              breadth: primaryBreadth,
+              area: parseFloat((primaryLength * primaryBreadth * CM2_TO_FT2_CONVERSION).toFixed(2))
+            });
+          }
+          
+          // Add additional measurements
+          const additionalMeasurements = multipleMeasurements[sectionId] || [];
+          additionalMeasurements.forEach(m => {
+            const mLength = parseFloat(m.length) || 0;
+            const mBreadth = parseFloat(m.breadth) || 0;
+            if (mLength > 0 && mBreadth > 0) {
+              allMeasurements.push({
+                length: mLength,
+                breadth: mBreadth,
+                area: parseFloat((mLength * mBreadth * CM2_TO_FT2_CONVERSION).toFixed(2))
+              });
+            }
+          });
+          
+          // Add measurements to section - ensure this matches the schema
+          if (allMeasurements.length > 0) {
+            sectionCopy.measurements = allMeasurements;
+          } else {
+            // If no measurements, provide an empty array
+            sectionCopy.measurements = [];
+          }
+        }
+        
+        // Handle running lengths
+        if (unitType === 'running_sqft') {
+          const sectionRunningLengths = runningLengths[sectionId] || [];
+          if (sectionRunningLengths.length > 0) {
+            // Filter out empty measurements
+            const validLengths = sectionRunningLengths.filter(l => l.length && parseFloat(l.length) > 0);
+            if (validLengths.length > 0) {
+              // Store running lengths in a format compatible with measurements schema
+              const formattedLengths = validLengths.map(l => ({
+                length: parseFloat(l.length) || 0,
+                breadth: 1, // Default breadth for running measurement
+                area: parseFloat((parseFloat(l.length) || 0) * CM_TO_FT_CONVERSION).toFixed(2)
+              }));
+              
+              // Store properly formatted measurements
+              sectionCopy.measurements = formattedLengths;
+              
+              // Remove runningLengths property before sending to server
+              // as it's not in the schema and only used for UI
+              delete sectionCopy.runningLengths;
+            } else {
+              sectionCopy.measurements = [];
+            }
+          } else {
+            sectionCopy.measurements = [];
+          }
+        }
+        
+        // For standard "pieces" type, ensure no measurements are sent
+        if (unitType === 'pieces') {
+          sectionCopy.measurements = [];
+        }
+        
+        // Remove unitType property before sending to server
+        // as it's not in the schema and only used for UI
+        delete sectionCopy.unitType;
+        
+        // Remove any client-side only properties that aren't in the schema
+        delete sectionCopy.length;
+        delete sectionCopy.breadth;
+        delete sectionCopy.id;
+        
+        return sectionCopy;
+      });
+
       const updatedEstimate = {
-        estimateNumber: editedEstimate.estimateNumber,
+        name: editedEstimate.name,
         clientId: editedEstimate.clientId,
         clientName: editedEstimate.clientName,
-        materials: editedEstimate.materials,
-        grandTotal: Math.floor(calculatedSubTotal),
-        status: editedEstimate.status
+        sections: sectionsWithMeasurements,
+        discount: showDiscount ? parseFloat(discountAmount) : 0,
+        total: calculatedSubTotal,
+        grandTotal: ceiledGrandTotal,
+        status: editedEstimate.status || 1,
+        paymentTerms: customPaymentTerms
       };
 
+      console.log("Sending to server:", JSON.stringify(updatedEstimate, null, 2));
+      
       const response = await axios.put(
         `${import.meta.env.VITE_API_URL}/api/estimates/update/${id}`,
         updatedEstimate
       );
       
-      if (response.data.success) {
-        setEstimate(response.data.data);
-        setEditedEstimate(response.data.data);
-        setGrandTotal(Math.floor(calculatedSubTotal));
+      if (response.data) {
+        console.log("Response from server:", response.data);
+        
+        // Update state with the newly returned data from the server
+        setEstimate(response.data);
+        setEditedEstimate(response.data);
+        setGrandTotal(ceiledGrandTotal);
         setIsEditing(false);
+        
+        // Reinitialize measurements data structures with the returned data
+        // This ensures state consistency with what's in the database
+        const newMultipleMeasurements = {};
+        const newRunningLengths = {};
+        
+        if (response.data.sections) {
+          response.data.sections.forEach(section => {
+            const sectionId = section._id;
+            if (!sectionId) return; // Skip if no valid ID
+            
+            const unitType = getSectionUnitType(section);
+            
+            // Handle area measurements
+            if (unitType === 'area' && section.measurements && section.measurements.length > 0) {
+              // First measurement is used as primary
+              const firstMeasurement = section.measurements[0];
+              if (firstMeasurement) {
+                section.length = firstMeasurement.length;
+                section.breadth = firstMeasurement.breadth;
+              }
+              
+              // Additional measurements go to the multipleMeasurements state
+              if (section.measurements.length > 1) {
+                newMultipleMeasurements[sectionId] = section.measurements.slice(1);
+              }
+            }
+            
+            // Handle running lengths
+            if (unitType === 'running_sqft' && section.measurements && section.measurements.length > 0) {
+              newRunningLengths[sectionId] = section.measurements.map(m => ({
+                length: m.length.toString()
+              }));
+            }
+          });
+        }
+        
+        // Update state with new measurements data
+        setMultipleMeasurements(newMultipleMeasurements);
+        setRunningLengths(newRunningLengths);
+        
         Swal.fire({
           title: 'Success!',
           text: 'Estimate updated successfully',
@@ -190,7 +441,7 @@ function EstimatePreview() {
       console.error('Error updating estimate:', error);
       Swal.fire({
         title: 'Error!',
-        text: 'Failed to update estimate',
+        text: error.response?.data?.message || 'Failed to update estimate',
         icon: 'error',
         confirmButtonText: 'OK'
       });
@@ -199,22 +450,27 @@ function EstimatePreview() {
 
   const handleSaveDiscount = async () => {
     try {
-      const flooredGrandTotal = Math.floor(grandTotal);
+      // Apply ceiling to grand total to match EstimateGenerationClient
+      const ceiledGrandTotal = Math.ceil(grandTotal);
+      
       const response = await axios.put(
-        `${import.meta.env.VITE_API_URL}/api/estimates/updateGrandTotal/${id}`,
-        { grandTotal: flooredGrandTotal }
+        `${import.meta.env.VITE_API_URL}/api/estimates/update/${id}`,
+        { 
+          discount: showDiscount ? parseFloat(discountAmount) : 0,
+          grandTotal: ceiledGrandTotal 
+        }
       );
       
-      if (response.data.success) {
+      if (response.data) {
         setEstimate({
           ...estimate,
-          grandTotal: flooredGrandTotal,
-          discount: showDiscount ? discountAmount : 0
+          grandTotal: ceiledGrandTotal,
+          discount: showDiscount ? parseFloat(discountAmount) : 0
         });
         setEditedEstimate({
           ...editedEstimate,
-          grandTotal: flooredGrandTotal,
-          discount: showDiscount ? discountAmount : 0
+          grandTotal: ceiledGrandTotal,
+          discount: showDiscount ? parseFloat(discountAmount) : 0
         });
         Swal.fire({
           title: 'Success!',
@@ -236,88 +492,718 @@ function EstimatePreview() {
     }
   };
 
-  const handleMaterialChange = (index, field, value) => {
-    const updatedMaterials = [...editedEstimate.materials];
-    updatedMaterials[index] = {
-      ...updatedMaterials[index],
+  const handleSectionChange = (index, field, value) => {
+    const updatedSections = [...editedEstimate.sections];
+    updatedSections[index] = {
+      ...updatedSections[index],
       [field]: value
     };
     
-    // Recalculate total for the material
-    if (field === 'price' || field === 'dimensions' || field === 'measurementType') {
-      if (updatedMaterials[index].measurementType === 'area') {
-        const area = updatedMaterials[index].dimensions.area;
-        updatedMaterials[index].total = (area * updatedMaterials[index].price).toFixed(2);
-      } else {
-        const pieces = updatedMaterials[index].dimensions.pieces;
-        updatedMaterials[index].total = (pieces * updatedMaterials[index].price).toFixed(2);
+    // Recalculate total for the section
+    if (field === 'unitPrice' || field === 'quantity') {
+      const quantity = parseFloat(updatedSections[index].quantity) || 0;
+      const unitPrice = parseFloat(updatedSections[index].unitPrice) || 0;
+      updatedSections[index].total = (quantity * unitPrice).toFixed(2);
+    }
+    
+    // Calculate quantity if length and breadth are set for area unit type
+    if ((field === 'length' || field === 'breadth') && getSectionUnitType(updatedSections[index]) === 'area') {
+      const section = updatedSections[index];
+      const sectionId = section._id || section.id;
+      
+      // Calculate the total area using all measurements
+      let totalAreaCm = 0;
+      
+      // Add area from primary measurement if both length and breadth exist
+      const primaryLength = parseFloat(section.length) || 0;
+      const primaryBreadth = parseFloat(section.breadth) || 0;
+      
+      if (primaryLength > 0 && primaryBreadth > 0) {
+        totalAreaCm += primaryLength * primaryBreadth;
+      }
+      
+      // Add areas from additional measurements
+      const additionalMeasurements = multipleMeasurements[sectionId] || [];
+      additionalMeasurements.forEach((m) => {
+        const mLength = parseFloat(m.length) || 0;
+        const mBreadth = parseFloat(m.breadth) || 0;
+        if (mLength > 0 && mBreadth > 0) {
+          const area = mLength * mBreadth;
+          totalAreaCm += area;
+        }
+      });
+      
+      // Convert total area from cm² to ft²
+      const totalAreaFt = (totalAreaCm * CM2_TO_FT2_CONVERSION).toFixed(2);
+      
+      if (totalAreaCm > 0) {
+        // Update quantity with calculated area
+        updatedSections[index].quantity = totalAreaFt;
+        
+        // Update total price
+        const unitPrice = parseFloat(section.unitPrice) || 0;
+        updatedSections[index].total = (parseFloat(totalAreaFt) * unitPrice).toFixed(2);
       }
     }
     
     // Recalculate subTotal
-    const newSubTotal = updatedMaterials.reduce((total, material) => {
-      return total + parseFloat(material.total);
+    const newSubTotal = updatedSections.reduce((total, section) => {
+      return total + parseFloat(section.total || 0);
     }, 0);
     
     setSubTotal(newSubTotal);
+    
+    // Update grand total if discount is applied
+    if (showDiscount) {
+      const discountValue = parseFloat(discountAmount) || 0;
+      setGrandTotal((newSubTotal - discountValue).toFixed(2));
+    } else {
+      setGrandTotal(newSubTotal.toFixed(2));
+    }
+    
     setEditedEstimate({
       ...editedEstimate,
-      materials: updatedMaterials
+      sections: updatedSections
     });
+  };
+  
+  // Add handler for multiple measurements
+  const handleAddMeasurement = (sectionId) => {
+    setMultipleMeasurements(prev => {
+      const currentMeasurements = prev[sectionId] || [];
+      // Add a new measurement with default empty values
+      const updatedMeasurements = [
+        ...currentMeasurements,
+        { length: '', breadth: '', area: 0 }
+      ];
+      
+      // Return updated measurements
+      return {
+        ...prev,
+        [sectionId]: updatedMeasurements
+      };
+    });
+    
+    // Find the section in the editedEstimate to trigger recalculation
+    const sectionIndex = editedEstimate.sections.findIndex(s => (s._id === sectionId || s.id === sectionId));
+    
+    // If we found the section, trigger a recalculation
+    if (sectionIndex !== -1) {
+      // Get the section's current values
+      const section = editedEstimate.sections[sectionIndex];
+      
+      // Simulate a change to force recalculation
+      if (section.length || section.breadth) {
+        // Force a recalculation by setting the primary length to its current value
+        setTimeout(() => {
+          handleSectionChange(
+            sectionIndex, 
+            'length', 
+            section.length || ''
+          );
+        }, 0);
+      }
+    }
+  };
+
+  // Add handler to update multiple measurements
+  const updateMeasurement = (sectionId, index, field, value) => {
+    setMultipleMeasurements(prev => {
+      const newMeasurements = [...(prev[sectionId] || [])];
+      
+      if (!newMeasurements[index]) {
+        newMeasurements[index] = { length: '', breadth: '', area: 0 };
+      }
+      
+      // Update the specific field in the measurement at the given index
+      newMeasurements[index] = {
+        ...newMeasurements[index],
+        [field]: value
+      };
+      
+      // Find the section in the editedEstimate
+      const sectionIndex = editedEstimate.sections.findIndex(s => s._id === sectionId || s.id === sectionId);
+      if (sectionIndex === -1) return prev;
+      
+      // Get the section
+      const section = editedEstimate.sections[sectionIndex];
+      
+      // Calculate the total area using all measurements
+      let totalAreaCm = 0;
+      
+      // Add area from primary measurement if both length and breadth exist
+      const primaryLength = parseFloat(section.length) || 0;
+      const primaryBreadth = parseFloat(section.breadth) || 0;
+      
+      if (primaryLength > 0 && primaryBreadth > 0) {
+        totalAreaCm += primaryLength * primaryBreadth;
+      }
+      
+      // Add areas from additional measurements
+      for (const m of newMeasurements) {
+        const mLength = parseFloat(m.length) || 0;
+        const mBreadth = parseFloat(m.breadth) || 0;
+        if (mLength > 0 && mBreadth > 0) {
+          totalAreaCm += mLength * mBreadth;
+        }
+      }
+      
+      // Convert total area from cm² to ft²
+      const totalAreaFt = (totalAreaCm * CM2_TO_FT2_CONVERSION).toFixed(2);
+      
+      if (totalAreaCm > 0) {
+        // Update the section with the calculated quantity
+        const updatedSections = [...editedEstimate.sections];
+        updatedSections[sectionIndex].quantity = totalAreaFt;
+        
+        // Update total
+        const unitPrice = parseFloat(updatedSections[sectionIndex].unitPrice) || 0;
+        updatedSections[sectionIndex].total = (parseFloat(totalAreaFt) * unitPrice).toFixed(2);
+        
+        // Update the edited estimate
+        setEditedEstimate({
+          ...editedEstimate,
+          sections: updatedSections
+        });
+        
+        // Calculate new subtotal directly
+        const newSubTotal = updatedSections.reduce((total, section) => {
+          return total + parseFloat(section.total || 0);
+        }, 0);
+        
+        // Update subtotal
+        setSubTotal(newSubTotal);
+        
+        // Update grand total if discount is applied
+        if (showDiscount) {
+          const discountValue = parseFloat(discountAmount) || 0;
+          setGrandTotal((newSubTotal - discountValue).toFixed(2));
+        } else {
+          setGrandTotal(newSubTotal.toFixed(2));
+        }
+      }
+      
+      return {
+        ...prev,
+        [sectionId]: newMeasurements
+      };
+    });
+  };
+
+  // Add handler to remove measurement
+  const removeMeasurement = (sectionId, index) => {
+    setMultipleMeasurements(prev => {
+      const currentMeasurements = [...(prev[sectionId] || [])];
+      
+      // Store the removed measurement before removing it
+      const removedMeasurement = currentMeasurements[index];
+      
+      // Remove the measurement
+      currentMeasurements.splice(index, 1);
+      
+      // Find the section in the editedEstimate
+      const sectionIndex = editedEstimate.sections.findIndex(s => s._id === sectionId || s.id === sectionId);
+      if (sectionIndex !== -1) {
+        // Get the section
+        const section = editedEstimate.sections[sectionIndex];
+        
+        // Calculate the total area using all remaining measurements
+        let totalAreaCm = 0;
+        
+        // Add area from primary measurement if both length and breadth exist
+        const primaryLength = parseFloat(section.length) || 0;
+        const primaryBreadth = parseFloat(section.breadth) || 0;
+        
+        if (primaryLength > 0 && primaryBreadth > 0) {
+          totalAreaCm += primaryLength * primaryBreadth;
+        }
+        
+        // Add areas from additional measurements
+        for (const m of currentMeasurements) {
+          const mLength = parseFloat(m.length) || 0;
+          const mBreadth = parseFloat(m.breadth) || 0;
+          if (mLength > 0 && mBreadth > 0) {
+            totalAreaCm += mLength * mBreadth;
+          }
+        }
+        
+        // Convert total area from cm² to ft²
+        const totalAreaFt = (totalAreaCm * CM2_TO_FT2_CONVERSION).toFixed(2);
+        
+        if (totalAreaCm > 0 || (removedMeasurement && (parseFloat(removedMeasurement.length) || parseFloat(removedMeasurement.breadth)))) {
+          // Update the section with the calculated quantity
+          const updatedSections = [...editedEstimate.sections];
+          updatedSections[sectionIndex].quantity = totalAreaFt;
+          
+          // Update total
+          const unitPrice = parseFloat(updatedSections[sectionIndex].unitPrice) || 0;
+          updatedSections[sectionIndex].total = (parseFloat(totalAreaFt) * unitPrice).toFixed(2);
+          
+          // Update the edited estimate
+          setEditedEstimate({
+            ...editedEstimate,
+            sections: updatedSections
+          });
+          
+          // Calculate new subtotal directly
+          const newSubTotal = updatedSections.reduce((total, section) => {
+            return total + parseFloat(section.total || 0);
+          }, 0);
+          
+          // Update subtotal
+          setSubTotal(newSubTotal);
+          
+          // Update grand total if discount is applied
+          if (showDiscount) {
+            const discountValue = parseFloat(discountAmount) || 0;
+            setGrandTotal((newSubTotal - discountValue).toFixed(2));
+          } else {
+            setGrandTotal(newSubTotal.toFixed(2));
+          }
+        }
+      }
+      
+      // Return updated measurements
+      return {
+        ...prev,
+        [sectionId]: currentMeasurements
+      };
+    });
+  };
+  
+  // Add handler for running feet measurements
+  const handleAddRunningLength = (sectionId) => {
+    setRunningLengths(prev => {
+      // Check if we already have any lengths for this section
+      const currentLengths = prev[sectionId] || [];
+      
+      // If we already have at least one length, only then add a new one
+      // Otherwise, just initialize with a single empty length
+      if (currentLengths.length > 0) {
+        return {
+          ...prev,
+          [sectionId]: [
+            ...currentLengths,
+            { length: '' }
+          ]
+        };
+      } else {
+        // Initialize with just one measurement
+        return {
+          ...prev,
+          [sectionId]: [{ length: '' }]
+        };
+      }
+    });
+  };
+
+  // Update running length measurement
+  const updateRunningLength = (sectionId, index, value) => {
+    setRunningLengths(prev => {
+      const newLengths = [...(prev[sectionId] || [])];
+      
+      // Update the length value
+      if (!newLengths[index]) {
+        newLengths[index] = { length: value };
+      } else {
+        newLengths[index] = {
+          ...newLengths[index],
+          length: value
+        };
+      }
+      
+      // Find the section in the editedEstimate
+      const sectionIndex = editedEstimate.sections.findIndex(s => s._id === sectionId || s.id === sectionId);
+      if (sectionIndex === -1) return prev;
+      
+      // Calculate the sum of all lengths
+      let totalLengthCm = 0;
+      
+      newLengths.forEach(l => {
+        if (l.length) totalLengthCm += parseFloat(l.length) || 0;
+      });
+      
+      // Convert cm to feet
+      const totalLengthFt = (totalLengthCm * CM_TO_FT_CONVERSION).toFixed(2);
+      
+      // Update the section with the new quantity
+      const updatedSections = [...editedEstimate.sections];
+      updatedSections[sectionIndex].quantity = totalLengthFt;
+      
+      // Update total price
+      const unitPrice = parseFloat(updatedSections[sectionIndex].unitPrice) || 0;
+      updatedSections[sectionIndex].total = (parseFloat(totalLengthFt) * unitPrice).toFixed(2);
+      
+      // Update the edited estimate
+      setEditedEstimate({
+        ...editedEstimate,
+        sections: updatedSections
+      });
+      
+      // Calculate new subtotal
+      const newSubTotal = updatedSections.reduce((total, section) => {
+        return total + parseFloat(section.total || 0);
+      }, 0);
+      
+      // Update subtotal
+      setSubTotal(newSubTotal);
+      
+      // Update grand total if discount is applied
+      if (showDiscount) {
+        const discountValue = parseFloat(discountAmount) || 0;
+        setGrandTotal((newSubTotal - discountValue));
+      } else {
+        setGrandTotal(newSubTotal);
+      }
+      
+      return {
+        ...prev,
+        [sectionId]: newLengths
+      };
+    });
+  };
+
+  // Remove running length measurement
+  const removeRunningLength = (sectionId, index) => {
+    setRunningLengths(prev => {
+      const newLengths = [...(prev[sectionId] || [])];
+      
+      // Remove the length entry
+      newLengths.splice(index, 1);
+      
+      // Find the section in the editedEstimate
+      const sectionIndex = editedEstimate.sections.findIndex(s => s._id === sectionId || s.id === sectionId);
+      if (sectionIndex === -1) return prev;
+      
+      // Calculate the sum of all lengths
+      let totalLengthCm = 0;
+      
+      newLengths.forEach(l => {
+        if (l.length) totalLengthCm += parseFloat(l.length) || 0;
+      });
+      
+      // Convert cm to feet
+      const totalLengthFt = (totalLengthCm * CM_TO_FT_CONVERSION).toFixed(2);
+      
+      // Update the section with the new quantity
+      const updatedSections = [...editedEstimate.sections];
+      updatedSections[sectionIndex].quantity = totalLengthFt;
+      
+      // Update total
+      const unitPrice = parseFloat(updatedSections[sectionIndex].unitPrice) || 0;
+      updatedSections[sectionIndex].total = (parseFloat(totalLengthFt) * unitPrice).toFixed(2);
+      
+      // Update the edited estimate
+      setEditedEstimate({
+        ...editedEstimate,
+        sections: updatedSections
+      });
+      
+      // Calculate new subtotal
+      const newSubTotal = updatedSections.reduce((total, section) => {
+        return total + parseFloat(section.total || 0);
+      }, 0);
+      
+      // Update subtotal
+      setSubTotal(newSubTotal);
+      
+      // Update grand total if discount is applied
+      if (showDiscount) {
+        const discountValue = parseFloat(discountAmount) || 0;
+        setGrandTotal(newSubTotal - discountValue);
+      } else {
+        setGrandTotal(newSubTotal);
+      }
+      
+      // If all lengths are removed, add one empty length measurement
+      if (newLengths.length === 0) {
+        // Just initialize with a single empty length
+        return {
+          ...prev,
+          [sectionId]: [{ length: '' }]
+        };
+      }
+      
+      return {
+        ...prev,
+        [sectionId]: newLengths
+      };
+    });
+  };
+  
+  // Helper function to determine unit type based on section data
+  const getSectionUnitType = (section) => {
+    if (!section) return 'pieces'; // Default if no section
+    
+    // If explicitly set in UI, use that
+    if (section.unitType) return section.unitType;
+    
+    // Check if it has measurements property for area type
+    if (section.measurements && section.measurements.length > 0) {
+      // Check the first measurement to see if it's an area measurement
+      const firstMeasurement = section.measurements[0];
+      if (firstMeasurement && 
+          firstMeasurement.length > 0 && 
+          firstMeasurement.breadth > 0) {
+        return 'area';
+      }
+      
+      // If it has measurements but they don't have breadth > 0, it's likely running feet
+      return 'running_sqft';
+    }
+    
+    // Has running lengths property (UI-specific)
+    if (section.runningLengths && section.runningLengths.length > 0) {
+      return 'running_sqft';
+    }
+    
+    // Try to infer from other properties or names
+    const nameInLowerCase = (section.description || '').toLowerCase();
+    
+    // Check for area-related terms
+    if (nameInLowerCase.includes('area') || 
+        nameInLowerCase.includes('square') || 
+        nameInLowerCase.includes('sq ft') || 
+        nameInLowerCase.includes('sqft')) {
+      return 'area';
+    }
+    
+    // Check for running-length related terms
+    if (nameInLowerCase.includes('running') || 
+        nameInLowerCase.includes('r.ft') || 
+        nameInLowerCase.includes('rft') ||
+        nameInLowerCase.includes('length')) {
+      return 'running_sqft';
+    }
+    
+    // Default to pieces
+    return 'pieces';
   };
 
   const handleDiscountChange = (e) => {
     const value = parseFloat(e.target.value) || 0;
     setDiscountAmount(value);
-    const newGrandTotal = parseFloat(editedEstimate.grandTotal) - value;
-    setGrandTotal(newGrandTotal.toFixed(2));
+    // Calculate new grand total by subtracting discount from subtotal
+    const newGrandTotal = subTotal - value;
+    setGrandTotal(newGrandTotal);
   };
 
   const handleGrandTotalChange = (e) => {
     const value = parseInt(e.target.value) || 0;
-    setGrandTotal(Math.floor(value));
-    const newDiscount = parseFloat(editedEstimate.grandTotal) - Math.floor(value);
+    setGrandTotal(value); // Store the exact value entered
+    // Calculate new discount amount based on the difference between subtotal and entered grand total
+    const newDiscount = subTotal - value;
     setDiscountAmount(newDiscount.toFixed(2));
   };
 
-  const handleDimensionChange = (materialIndex, dimension, value) => {
-    const updatedMaterials = [...editedEstimate.materials];
-    const material = updatedMaterials[materialIndex];
+  const handleQuantityChange = (sectionIndex, value) => {
+    const updatedSections = [...editedEstimate.sections];
+    const section = updatedSections[sectionIndex];
     
-    if (material.measurementType === 'area') {
-      const length = dimension === 'length' ? parseFloat(value) : material.dimensions.length;
-      const breadth = dimension === 'breadth' ? parseFloat(value) : material.dimensions.breadth;
-      const area = (length * breadth * 0.0328084 * 0.0328084).toFixed(2);
+    // Update quantity and recalculate total
+    updatedSections[sectionIndex] = {
+      ...section,
+      quantity: value,
+      total: (value * section.unitPrice).toFixed(2)
+    };
+    
+    // Recalculate subTotal
+    const newSubTotal = updatedSections.reduce((total, section) => {
+      return total + parseFloat(section.total || 0);
+    }, 0);
+    
+    setSubTotal(newSubTotal);
+    setEditedEstimate({
+      ...editedEstimate,
+      sections: updatedSections,
+      total: newSubTotal.toFixed(2)
+    });
+  };
+
+  const handleRemoveSection = (index) => {
+    const updatedSections = [...editedEstimate.sections];
+    
+    // Get the section before removing it to clean up related state
+    const removingSection = updatedSections[index];
+    const sectionId = removingSection._id || removingSection.id;
+    
+    // Remove section
+    updatedSections.splice(index, 1);
+    
+    // Clean up measurements state for this section
+    if (sectionId) {
+      // Clean up multiple measurements if they exist
+      setMultipleMeasurements(prev => {
+        const updated = { ...prev };
+        delete updated[sectionId];
+        return updated;
+      });
       
-      updatedMaterials[materialIndex] = {
-        ...material,
-        dimensions: {
-          ...material.dimensions,
-          [dimension]: value,
-          area: area
-        },
-        total: (area * material.price).toFixed(2)
+      // Clean up running lengths if they exist
+      setRunningLengths(prev => {
+        const updated = { ...prev };
+        delete updated[sectionId];
+        return updated;
+      });
+    }
+    
+    // Recalculate subTotal
+    const newSubTotal = updatedSections.reduce((total, section) => {
+      return total + parseFloat(section.total || 0);
+    }, 0);
+    
+    // Update subtotal
+    setSubTotal(newSubTotal);
+    
+    // Update grand total based on discount
+    if (showDiscount) {
+      const discountValue = parseFloat(discountAmount) || 0;
+      // Ensure discount doesn't make grand total negative
+      const newGrandTotal = Math.max(0, newSubTotal - discountValue);
+      setGrandTotal(newGrandTotal);
+    } else {
+      // If no discount, grand total equals subtotal
+      setGrandTotal(newSubTotal);
+    }
+    
+    // Update edited estimate with new sections
+    setEditedEstimate({
+      ...editedEstimate,
+      sections: updatedSections,
+      total: newSubTotal.toFixed(2),
+      grandTotal: showDiscount ? 
+        Math.max(0, newSubTotal - parseFloat(discountAmount) || 0).toFixed(2) : 
+        newSubTotal.toFixed(2)
+    });
+  };
+
+  const handleAddSection = () => {
+    setShowCustomModal(true);
+  };
+
+  const handleCustomItemChange = (field, value) => {
+    setCustomItem(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleAddCustomItem = () => {
+    // Validate custom item
+    if (!customItem.category || !customItem.subcategory || !customItem.description || !customItem.price) {
+      Swal.fire({
+        title: 'Error!',
+        text: 'Please fill in all required fields',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+      return;
+    }
+
+    // Create a new section object from the custom item with unit type specific properties
+    const unitPrice = parseFloat(customItem.price) || 0;
+    
+    // Create base section that follows mongoose schema requirements
+    const baseSection = {
+      // Use a temporary client ID - this will be removed during save
+      _id: `custom_${Date.now()}`,
+      
+      // Required schema fields - ensure all are present
+      category: customItem.category,
+      subcategory: customItem.subcategory,
+      material: customItem.material || '',
+      description: customItem.description,
+      unitPrice: unitPrice,
+      quantity: 1, // Default quantity, will be updated for area/running types
+      total: unitPrice, // Initial total, will be updated if needed
+      measurements: [], // Initialize empty measurements array (required by schema)
+      
+      // UI-specific field, not in schema but used for tracking
+      unitType: customItem.unitType
+    };
+
+    let newSection;
+    
+    // Handle different unit types
+    if (customItem.unitType === 'area') {
+      // For area measurements
+      newSection = {
+        ...baseSection,
+        length: '', // For primary measurement (UI only)
+        breadth: '' // For primary measurement (UI only)
+      };
+    } else if (customItem.unitType === 'running_sqft') {
+      // For running feet measurements
+      newSection = {
+        ...baseSection,
+        // This will be used only for UI - will be converted to measurements on save
+        runningLengths: []
       };
     } else {
-      updatedMaterials[materialIndex] = {
-        ...material,
-        dimensions: {
-          ...material.dimensions,
-          pieces: value
-        },
-        total: (value * material.price).toFixed(2)
+      // For pieces/default - no extra fields needed
+      newSection = {
+        ...baseSection
       };
     }
     
-    // Recalculate grand total
-    const newGrandTotal = updatedMaterials.reduce((total, material) => {
-      return total + parseFloat(material.total);
+    // Add to sections
+    const sectionsWithNewItem = [...editedEstimate.sections, newSection];
+    
+    // Recalculate subTotal after adding the new section
+    const updatedSubTotal = sectionsWithNewItem.reduce((total, section) => {
+      return total + parseFloat(section.total || 0);
     }, 0);
     
+    // Update subtotal
+    setSubTotal(updatedSubTotal);
+    
+    // Update grand total based on discount
+    if (showDiscount) {
+      const discountValue = parseFloat(discountAmount) || 0;
+      // Ensure discount doesn't make grand total negative
+      const newGrandTotal = Math.max(0, updatedSubTotal - discountValue);
+      setGrandTotal(newGrandTotal);
+    } else {
+      // If no discount, grand total equals subtotal
+      setGrandTotal(updatedSubTotal);
+    }
+    
+    // Update edited estimate
     setEditedEstimate({
       ...editedEstimate,
-      materials: updatedMaterials,
-      grandTotal: newGrandTotal.toFixed(2)
+      sections: sectionsWithNewItem,
+      total: updatedSubTotal.toFixed(2),
+      grandTotal: showDiscount ? 
+        Math.max(0, updatedSubTotal - parseFloat(discountAmount) || 0).toFixed(2) : 
+        updatedSubTotal.toFixed(2)
+    });
+    
+    // If it's a running_sqft type, initialize with one empty measurement
+    if (newSection.unitType === 'running_sqft') {
+      // Initialize with a single measurement field in the UI state
+      setRunningLengths(prev => ({
+        ...prev,
+        [newSection._id]: [{ length: '' }]
+      }));
+    }
+
+    // Reset custom item form and close modal
+    setCustomItem({
+      category: "",
+      subcategory: "",
+      material: "",
+      description: "",
+      price: "",
+      unitType: "pieces"
+    });
+    setShowCustomModal(false);
+
+    // Show success message
+    Swal.fire({
+      title: 'Success!',
+      text: 'Custom item added to estimate',
+      icon: 'success',
+      confirmButtonText: 'OK'
     });
   };
 
@@ -352,7 +1238,7 @@ function EstimatePreview() {
       
       // Add estimate details on left
       doc.setFontSize(10);
-      doc.text(`Invoice No: ${estimate.estimateNumber || 'EST-' + new Date().getTime()}`, 20, 85);
+      doc.text(`Invoice No: ${estimate.name || 'EST-' + new Date().getTime()}`, 20, 85);
       doc.text("Date: " + new Date(estimate.createdAt).toLocaleDateString(), 20, 90);
 
       // Add client details on right with "To:" prefix
@@ -362,111 +1248,235 @@ function EstimatePreview() {
       let yPos = 110;
       let currentPage = 1;
 
-      // Add materials table
-      const tableData = estimate.materials.map(material => {
-        if (material.measurementType === 'area') {
-          return [
-            material.name,
-            material.category,
-            `${material.dimensions.length} x ${material.dimensions.breadth}`,
-            `${material.dimensions.area} sq ft`,
-            `Rs. ${material.price}`,
-            `Rs. ${material.total}`
-          ];
-        } else {
-          return [
-            material.name,
-            material.category,
-            `${material.dimensions.pieces} pieces`,
-            '-',
-            `Rs. ${material.price}`,
-            `Rs. ${material.total}`
-          ];
+      // Organize sections by category and subcategory like in the UI
+      const organizedSections = {};
+      estimate.sections.forEach(section => {
+        const categoryName = section.category || 'Uncategorized';
+        const subcategoryName = section.subcategory || 'Other';
+        
+        if (!organizedSections[categoryName]) {
+          organizedSections[categoryName] = {};
         }
+        
+        if (!organizedSections[categoryName][subcategoryName]) {
+          organizedSections[categoryName][subcategoryName] = [];
+        }
+        
+        organizedSections[categoryName][subcategoryName].push(section);
       });
 
-      // Create PDF table data without category column
-      const pdfTableData = tableData.map(row => [row[0], row[2], row[3], row[4], row[5]]);
-
-      autoTable(doc, {
-        startY: yPos,
-        head: [['Material', 'Dimensions', 'Area/Pieces', 'Price', 'Total']],
-        body: pdfTableData,
-        theme: 'grid',
-        headStyles: { fillColor: [248, 250, 252], textColor: [0, 0, 0] },
-        styles: { fontSize: 8 },
-        pageBreak: 'auto',
-        didDrawPage: function(data) {
-          // Add border to new pages created by autoTable
-          if (data.pageNumber > currentPage) {
-            currentPage = data.pageNumber;
-            doc.rect(5, 5, 200, 287);
-          }
+      // Process each category and its subcategories
+      Object.entries(organizedSections).forEach(([category, subcategories]) => {
+        // Check if we need to add a page break
+        if (yPos > 250) {
+          doc.addPage();
+          currentPage++;
+          doc.rect(5, 5, 200, 287); // Add border to new page
+          yPos = 20; // Reset y position for new page
         }
-      });
 
-      yPos = doc.lastAutoTable.finalY + 20;
+        // Add category heading
+        doc.setFontSize(12);
+        doc.setTextColor(30, 41, 59);
+        doc.setFont(undefined, 'bold');
+        doc.text(category, 20, yPos);
+        yPos += 8;
+
+        // Process each subcategory and its sections
+        Object.entries(subcategories).forEach(([subcategory, sections]) => {
+          // Add subcategory name
+          doc.setFontSize(10);
+          doc.setFont(undefined, 'normal');
+          doc.text(subcategory, 25, yPos);
+          yPos += 7;
+
+          // Create table data for this subcategory
+          const tableData = sections.map(section => {
+            // Format description to include subcategory and material
+            let descriptionText ;
+            
+            if (section.material) {
+              descriptionText = `Material: ${section.material}\n`;
+            }
+            
+            descriptionText += section.description;
+            
+            // Handle different types of sections based on what data is present
+            const unitType = getSectionUnitType(section);
+            
+            if (unitType === 'area' && section.measurements && section.measurements.length > 0) {
+              // This is an area measurement
+              const dimensions = section.measurements.map(m => 
+                `${m.length}×${m.breadth}cm`
+              ).join(', ');
+              
+              return [
+                descriptionText,
+                dimensions,
+                `${section.quantity} sq ft`,
+                `Rs. ${section.unitPrice}`,
+                `Rs. ${section.total}`
+              ];
+            } else if (unitType === 'running_sqft' && section.runningLengths && section.runningLengths.length > 0) {
+              // This is a running length measurement
+              const dimensions = section.runningLengths.map(l => 
+                `${l.length}cm`
+              ).join(', ');
+              
+              return [
+                descriptionText,
+                dimensions,
+                `${section.quantity} ft`,
+                `Rs. ${section.unitPrice}`,
+                `Rs. ${section.total}`
+              ];
+            } else {
+              // This is either pieces or a type without specific measurements
+              return [
+                descriptionText,
+                `${section.quantity} ${section.quantity > 1 ? 'units' : 'unit'}`,
+                '-',
+                `Rs. ${section.unitPrice}`,
+                `Rs. ${section.total}`
+              ];
+            }
+          });
+
+          // Draw the table for this subcategory
+          autoTable(doc, {
+            startY: yPos,
+            head: [['Description', 'Dimensions/Qty', 'Area/Unit', 'Price', 'Total']],
+            body: tableData,
+            theme: 'grid',
+            headStyles: { fillColor: [248, 250, 252], textColor: [0, 0, 0] },
+            styles: { fontSize: 8 },
+            pageBreak: 'auto',
+            margin: { left: 20, right: 20 },
+            didDrawPage: function(data) {
+              // Add border to new pages created by autoTable
+              if (data.pageNumber > currentPage) {
+                currentPage = data.pageNumber;
+                doc.rect(5, 5, 200, 287);
+              }
+            }
+          });
+          
+          yPos = doc.lastAutoTable.finalY + 10;
+        });
+      });
 
       // Calculate sub-total
-      const subTotal = estimate.materials.reduce((total, material) => {
-        return total + parseFloat(material.total);
+      const subTotal = estimate.sections.reduce((total, section) => {
+        return total + parseFloat(section.total || 0);
       }, 0);
 
       // Add sub-total
       doc.setDrawColor(226, 232, 240);
-      doc.line(20, yPos - 10, 190, yPos - 10);
+      doc.line(20, yPos - 5, 190, yPos - 5);
       
-      doc.setFontSize(12);
+      doc.setFontSize(10);
       doc.setTextColor(30, 41, 59);
       doc.setFont(undefined, 'bold');
-      doc.text(`Sub Total: Rs. ${subTotal.toFixed(2)}`, 190, yPos, { align: 'right' });
+      doc.text(`Sub Total:`, 150, yPos);
+      
+      // Simple formatting with Rs. prefix
+      const formattedSubTotal = `Rs. ${subTotal.toFixed(2)}`;
+      doc.text(formattedSubTotal, 190, yPos, { align: 'right' });
       
       // Add discount if exists
-      if (subTotal !== parseFloat(estimate.grandTotal)) {
-        yPos += 10;
-        const discount = subTotal - parseFloat(estimate.grandTotal);
-        doc.text(`Discount: Rs. ${discount.toFixed(2)}`, 190, yPos, { align: 'right' });
+      if (estimate.discount && estimate.discount > 0) {
+        yPos += 7;
+        doc.text(`Discount:`, 150, yPos);
+        
+        // Simple formatting with Rs. prefix for discount
+        const formattedDiscount = `Rs. ${estimate.discount.toFixed(2)}`;
+        doc.text(formattedDiscount, 190, yPos, { align: 'right' });
       }
       
       // Add grand total
-      yPos += 10;
-      doc.text(`Grand Total: Rs. ${Math.floor(estimate.grandTotal)}`, 190, yPos, { align: 'right' });
-      
-      // Add payment terms note
-      yPos += 20;
-      doc.setFontSize(10);
-      doc.setTextColor(30, 41, 59);
-      doc.text("NOTE:", 20, yPos);
       yPos += 7;
-      doc.setFontSize(8);
-      doc.text("* The above rate inclusive of material cost, transportation, labour charges and service charges", 25, yPos);
-      yPos += 5;
-      doc.text("* Advance 50% of total amount along with the confirmed work order", 25, yPos);
-      yPos += 5;
-      doc.text("* 25% of the total amount after completion of carcass and cabin partition works", 25, yPos);
-      yPos += 5;
-      doc.text("* Balance 25% of the total amount after completing shutter works", 25, yPos);
-      yPos += 5;
-      doc.text("* Additional work and area are calculated separately", 25, yPos);
+      doc.setFontSize(10);
+      doc.text(`Grand Total:`, 150, yPos);
       
-      // Add custom payment terms if they exist
-      if (customPaymentTerms.trim()) {
-        yPos += 5; // Add a single line break before custom terms
-        doc.setFontSize(8);
-        
-        // Split the custom terms into lines that fit within the page width
-        const customTermsLines = doc.splitTextToSize(customPaymentTerms, 170);
-        customTermsLines.forEach(line => {
-          doc.text(`* ${line}`, 25, yPos);
-          yPos += 5;
-        });
+      // Simple formatting with Rs. prefix for grand total
+      const formattedGrandTotal = `Rs. ${Math.floor(estimate.grandTotal).toFixed(2)}`;
+      doc.text(formattedGrandTotal, 193, yPos, { align: 'right' });
+      
+      // Always add notes section on a new page or with sufficient space
+      // Check if we need to add a page break before notes section
+      if (yPos > 200) {
+        doc.addPage();
+        currentPage++;
+        doc.rect(5, 5, 200, 287); // Add border to new page
+        yPos = 30; // Reset y position for new page with more space for notes
+      } else {
+        // Add some space before notes section
+        yPos += 30;
       }
       
-      // Add footer
-      yPos += 15;
-      doc.setFontSize(8);
+      // Add Notes and Terms section
+      doc.setFontSize(12);
+      doc.setTextColor(30, 41, 59);
+      doc.setFont(undefined, 'bold');
+      doc.text("Notes & Terms", 20, yPos);
+      yPos += 10;
+      
+      // Add standard terms
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'normal');
+      doc.setTextColor(60, 60, 60);
+      
+      const standardTerms = [
+        "• Price includes materials, transport, labor and service",
+        "• 50% payment needed upfront with order",
+        "• 25% payment after basic structure work",
+        "• Final 25% payment after finishing work",
+        "• Extra work costs extra"
+      ];
+      
+      standardTerms.forEach(term => {
+        doc.text(term, 25, yPos);
+        yPos += 6;
+      });
+      
+      // Add custom payment terms if available
+      if (customPaymentTerms && customPaymentTerms.trim()) {
+        yPos += 5;
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.text("Custom Terms:", 20, yPos);
+        yPos += 7;
+        
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(9);
+        
+        // Split the custom terms into lines to fit the page width
+        const splitCustomTerms = doc.splitTextToSize(customPaymentTerms, 160);
+        doc.text(splitCustomTerms, 25, yPos);
+        
+        // Move yPos down based on how many lines were created
+        yPos += splitCustomTerms.length * 6 + 10;
+      } else {
+        yPos += 15;
+      }
+      
+      // Add signature section if there's enough space
+      if (yPos < 250) {
+        doc.setDrawColor(200, 200, 200);
+        doc.line(20, yPos, 80, yPos);
+        doc.line(120, yPos, 180, yPos);
+        
+        yPos += 5;
+        doc.setFontSize(8);
+        doc.text("Customer Signature", 20, yPos);
+        doc.text("For Takshaga", 120, yPos);
+      }
+      
+      // Add thank you note at the bottom
+      yPos = 270;
+      doc.setFontSize(9);
       doc.setTextColor(100, 116, 139);
-      doc.text("Thank you !", 105, yPos, { align: "center" });
+      doc.text("Thank you for your business!", 105, yPos, { align: "center" });
       
       // Add page numbers to all pages
       const pageCount = doc.internal.getNumberOfPages();
@@ -496,9 +1506,9 @@ function EstimatePreview() {
       const message = `Dear ${estimate.clientName},\n\n` +
         `Thank you for choosing Takshaga for your project. Please find the estimate details below:\n\n` +
         `📋 *Estimate Details*\n` +
-        `Estimate No: ${estimate.estimateNumber || 'N/A'}\n` +
+        `Estimate Name: ${estimate.name || 'N/A'}\n` +
         `Date: ${new Date(estimate.createdAt).toLocaleDateString()}\n` +
-        `Status: ${estimate.status}\n\n` +
+        `Status: ${estimate.status || 'Pending'}\n\n` +
         `💰 *Total Amount: Rs. ${estimate.grandTotal}*\n\n` +
         `📞 *Contact Us*\n` +
         `Phone: +91 9846660624\n` +
@@ -527,43 +1537,6 @@ function EstimatePreview() {
         confirmButtonText: 'OK'
       });
     }
-  };
-
-  const handleRemoveMaterial = (index) => {
-    const updatedMaterials = [...editedEstimate.materials];
-    updatedMaterials.splice(index, 1);
-    
-    // Recalculate subTotal
-    const newSubTotal = updatedMaterials.reduce((total, material) => {
-      return total + parseFloat(material.total);
-    }, 0);
-    
-    setSubTotal(newSubTotal);
-    setEditedEstimate({
-      ...editedEstimate,
-      materials: updatedMaterials
-    });
-  };
-
-  const handleAddMaterial = () => {
-    const newMaterial = {
-      name: '',
-      category: '',
-      measurementType: 'area',
-      dimensions: {
-        length: 0,
-        breadth: 0,
-        area: 0,
-        pieces: 0
-      },
-      price: 0,
-      total: 0
-    };
-    
-    setEditedEstimate({
-      ...editedEstimate,
-      materials: [...editedEstimate.materials, newMaterial]
-    });
   };
 
   if (isLoading) {
@@ -613,15 +1586,6 @@ function EstimatePreview() {
                   Estimate Preview
                 </motion.h2>
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <input
-                      type="checkbox"
-                      checked={showAllDiscounts}
-                      onChange={(e) => setShowAllDiscounts(e.target.checked)}
-                      style={{ width: '16px', height: '16px' }}
-                    />
-                    Show All Discounts
-                  </label>
                   {!isEditing ? (
                     <StyledButton
                       onClick={handleEdit}
@@ -659,7 +1623,7 @@ function EstimatePreview() {
                   }}>
                     <div>
                       <p style={{color: '#64748b', marginBottom: '10px'}}>
-                        <strong>Estimate No:</strong> {editedEstimate.estimateNumber || 'N/A'}
+                        <strong>Estimate Name:</strong> {editedEstimate.name || 'N/A'}
                       </p>
                       <p style={{color: '#64748b', marginBottom: '10px'}}>
                         <strong>Client Name:</strong> {editedEstimate.clientName}
@@ -670,256 +1634,509 @@ function EstimatePreview() {
                     </div>
                     <div>
                       <p style={{color: '#64748b', marginBottom: '10px'}}>
-                        <strong>Status:</strong> <span className={`status-badge status-${editedEstimate.status}`}>{editedEstimate.status}</span>
+                        <strong>Status:</strong> <span className={`status-badge status-${editedEstimate.status || 'pending'}`}>{editedEstimate.status || 'Pending'}</span>
                       </p>
                       <p style={{color: '#64748b', marginBottom: '10px'}}>
-                        <strong>Total Items:</strong> {editedEstimate.materials.length}
+                        <strong>Total Items:</strong> {editedEstimate.sections?.length || 0}
                       </p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Materials Table */}
+              {/* Sections Table */}
               <div style={{marginBottom: '30px'}}>
-                <h3 style={{color: '#1e293b', marginBottom: '15px'}}>Materials Details</h3>
-                <table className="preview-table" style={{
+                <h3 style={{color: '#1e293b', marginBottom: '15px'}}>Sections Details</h3>
+                
+                {/* Group sections by category and subcategory */}
+                {(() => {
+                  // Organize data by category and subcategory
+                  const groupedSections = {};
+                  
+                  editedEstimate.sections?.forEach(section => {
+                    const categoryName = section.category || 'Uncategorized';
+                    const subcategoryName = section.subcategory || 'Other';
+                    
+                    if (!groupedSections[categoryName]) {
+                      groupedSections[categoryName] = {};
+                    }
+                    
+                    if (!groupedSections[categoryName][subcategoryName]) {
+                      groupedSections[categoryName][subcategoryName] = [];
+                    }
+                    
+                    groupedSections[categoryName][subcategoryName].push(section);
+                  });
+                  
+                  // Render groups
+                  return Object.entries(groupedSections).map(([category, subcategories]) => (
+                    <div key={category} style={{ marginBottom: '32px' }}>
+                      {/* Category Heading */}
+                      <h3 style={{ 
+                        fontSize: '18px', 
+                        color: '#333', 
+                        borderBottom: '2px solid #3b82f6',
+                        paddingBottom: '8px',
+                        marginBottom: '16px'
+                      }}>
+                        {category}
+                      </h3>
+                      
+                      {/* Subcategories */}
+                      {Object.entries(subcategories).map(([subcategory, sections]) => (
+                        <div key={subcategory} style={{ marginBottom: '24px' }}>
+                          {/* Subcategory heading */}
+                          <h4 style={{ 
+                            fontSize: '16px', 
+                            color: '#1e293b',
+                            marginBottom: '12px',
+                            paddingLeft: '8px'
+                          }}>
+                            {subcategory}
+                          </h4>
+                          
+                          {/* Sections Table */}
+                          <table className="preview-table" style={{
+                            width: '100%',
+                            borderCollapse: 'collapse',
+                            marginBottom: '16px'
+                          }}>
+                            <thead>
+                              <tr style={{backgroundColor: '#f8fafc'}}>
+                                <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Description</th>
+                                <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Material</th>
+                                <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Quantity</th>
+                                <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Price</th>
+                                <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Total</th>
+                                {isEditing && (
+                                  <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Actions</th>
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sections.map((section, index) => (
+                                <tr key={index} style={{borderBottom: '1px solid #e2e8f0'}}>
+                                  <td style={{padding: '12px'}}>
+                                    {isEditing ? (
+                                      <input
+                                        type="text"
+                                        value={section.description || ''}
+                                        onChange={(e) => handleSectionChange(editedEstimate.sections.findIndex(s => s === section), 'description', e.target.value)}
+                                        style={{
+                                          padding: '5px',
+                                          border: '1px solid #cbd5e1',
+                                          borderRadius: '4px',
+                                          width: '100%',
+                                          color: '#1e293b'
+                                        }}
+                                      />
+                                    ) : (
+                                      section.description
+                                    )}
+                                  </td>
+                                  <td style={{padding: '12px'}}>
+                                    {isEditing ? (
+                                      <input
+                                        type="text"
+                                        value={section.material || ''}
+                                        onChange={(e) => handleSectionChange(editedEstimate.sections.findIndex(s => s === section), 'material', e.target.value)}
+                                        style={{
+                                          padding: '5px',
+                                          border: '1px solid #cbd5e1',
+                                          borderRadius: '4px',
+                                          width: '100%',
+                                          color: '#1e293b'
+                                        }}
+                                      />
+                                    ) : (
+                                      section.material || 'N/A'
+                                    )}
+                                  </td>
+                                  <td style={{padding: '12px'}}>
+                                    {isEditing ? (
+                                      (() => {
+                                        const unitType = getSectionUnitType(section);
+                                        
+                                        if (unitType === 'area') {
+                                          return (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                              {/* Primary measurement fields */}
+                                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                  <input 
+                                                    type="number"
+                                                    placeholder="L (cm)"
+                                                    value={section.length || ''}
+                                                    onChange={(e) => handleSectionChange(editedEstimate.sections.findIndex(s => s === section), 'length', e.target.value)}
+                                                    style={{
+                                                      width: '60px',
+                                                      padding: '6px',
+                                                      border: '1px solid #ddd',
+                                                      borderRadius: '6px',
+                                                      textAlign: 'center',
+                                                      color: '#000'
+                                                    }}
+                                                  />
+                                                  <span style={{ margin: '0 8px', color: '#666' }}>×</span>
+                                                  <input 
+                                                    type="number"
+                                                    placeholder="B (cm)"
+                                                    value={section.breadth || ''}
+                                                    onChange={(e) => handleSectionChange(editedEstimate.sections.findIndex(s => s === section), 'breadth', e.target.value)}
+                                                    style={{
+                                                      width: '60px',
+                                                      padding: '6px',
+                                                      border: '1px solid #ddd',
+                                                      borderRadius: '6px',
+                                                      textAlign: 'center',
+                                                      color: '#000'
+                                                    }}
+                                                  />
+                                                </div>
+                                              </div>
+                                              
+                                              {/* Multiple measurements section */}
+                                              {(multipleMeasurements[section._id] || []).map((measurement, idx) => (
+                                                <div key={idx} style={{ 
+                                                  display: 'flex', 
+                                                  alignItems: 'center', 
+                                                  gap: '8px',
+                                                  backgroundColor: '#f8f9fa',
+                                                  padding: '6px 10px',
+                                                  borderRadius: '6px'
+                                                }}>
+                                                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                    <input 
+                                                      type="number"
+                                                      placeholder="L (cm)"
+                                                      value={measurement.length}
+                                                      onChange={(e) => updateMeasurement(section._id, idx, 'length', e.target.value)}
+                                                      style={{
+                                                        width: '60px',
+                                                        padding: '6px',
+                                                        border: '1px solid #ddd',
+                                                        borderRadius: '6px',
+                                                        textAlign: 'center',
+                                                        color: '#000'
+                                                      }}
+                                                    />
+                                                    <span style={{ margin: '0 8px', color: '#666' }}>×</span>
+                                                    <input 
+                                                      type="number"
+                                                      placeholder="B (cm)"
+                                                      value={measurement.breadth}
+                                                      onChange={(e) => updateMeasurement(section._id, idx, 'breadth', e.target.value)}
+                                                      style={{
+                                                        width: '60px',
+                                                        padding: '6px',
+                                                        border: '1px solid #ddd',
+                                                        borderRadius: '6px',
+                                                        textAlign: 'center',
+                                                        color: '#000'
+                                                      }}
+                                                    />
+                                                  </div>
+                                                  <button
+                                                    onClick={() => removeMeasurement(section._id, idx)}
+                                                    style={{
+                                                      background: 'none',
+                                                      border: 'none',
+                                                      color: '#dc3545',
+                                                      cursor: 'pointer',
+                                                      fontSize: '16px',
+                                                      marginLeft: 'auto'
+                                                    }}
+                                                  >
+                                                    ×
+                                                  </button>
+                                                </div>
+                                              ))}
+                                              
+                                              {/* Add measurement button */}
+                                              <button
+                                                onClick={() => handleAddMeasurement(section._id)}
+                                                style={{
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  gap: '6px',
+                                                  background: 'none',
+                                                  border: '1px dashed #0077B6',
+                                                  borderRadius: '6px',
+                                                  padding: '4px 10px',
+                                                  fontSize: '12px',
+                                                  color: '#0077B6',
+                                                  fontWeight: '500',
+                                                  cursor: 'pointer',
+                                                  marginTop: '4px',
+                                                  alignSelf: 'flex-start'
+                                                }}
+                                              >
+                                                <span>+</span> Add Measurement
+                                              </button>
+                                              
+                                              <div style={{ fontSize: '12px', color: '#555', marginTop: '4px' }}>
+                                                Total Area: <span style={{ fontWeight: '500', color: '#0077B6' }}>
+                                                  {section.quantity || 0} ft²
+                                                </span>
+                                              </div>
+                                            </div>
+                                          );
+                                        } else if (unitType === 'running_sqft') {
+                                          return (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                              {/* Running lengths measurements */}
+                                              {(runningLengths[section._id] || []).map((item, idx) => (
+                                                <div key={idx} style={{ 
+                                                  display: 'flex', 
+                                                  alignItems: 'center', 
+                                                  gap: '8px',
+                                                  backgroundColor: '#f8f9fa',
+                                                  padding: '6px 10px',
+                                                  borderRadius: '6px'
+                                                }}>
+                                                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                    <input 
+                                                      type="number"
+                                                      placeholder="Length (cm)"
+                                                      value={item.length}
+                                                      onChange={(e) => updateRunningLength(section._id, idx, e.target.value)}
+                                                      style={{
+                                                        width: '100px',
+                                                        padding: '6px',
+                                                        border: '1px solid #ddd',
+                                                        borderRadius: '6px',
+                                                        textAlign: 'center',
+                                                        color: '#000'
+                                                      }}
+                                                    />
+                                                  </div>
+                                                  <button
+                                                    onClick={() => removeRunningLength(section._id, idx)}
+                                                    style={{
+                                                      background: 'none',
+                                                      border: 'none',
+                                                      color: '#dc3545',
+                                                      cursor: 'pointer',
+                                                      fontSize: '16px',
+                                                      marginLeft: 'auto'
+                                                    }}
+                                                  >
+                                                    ×
+                                                  </button>
+                                                </div>
+                                              ))}
+                                              
+                                              {/* If no running length entries yet, add one automatically */}
+                                              {(!runningLengths[section._id] || runningLengths[section._id].length === 0) && (
+                                                (() => {
+                                                  // Initialize with one measurement on first render
+                                                  setTimeout(() => handleAddRunningLength(section._id), 0);
+                                                  return (
+                                                    <div style={{ 
+                                                      fontSize: '13px', 
+                                                      color: '#666', 
+                                                      fontStyle: 'italic' 
+                                                    }}>
+                                                      Add length measurements
+                                                    </div>
+                                                  );
+                                                })()
+                                              )}
+                                              
+                                              {/* Add running length button */}
+                                              <button
+                                                onClick={() => handleAddRunningLength(section._id)}
+                                                style={{
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  gap: '6px',
+                                                  background: 'none',
+                                                  border: '1px dashed #0077B6',
+                                                  borderRadius: '6px',
+                                                  padding: '4px 10px',
+                                                  fontSize: '12px',
+                                                  color: '#0077B6',
+                                                  fontWeight: '500',
+                                                  cursor: 'pointer',
+                                                  marginTop: '4px',
+                                                  alignSelf: 'flex-start'
+                                                }}
+                                              >
+                                                <span>+</span> Add Length
+                                              </button>
+                                              
+                                              <div style={{ fontSize: '12px', color: '#555', marginTop: '4px', display: 'flex', flexDirection: 'column' }}>
+                                                <div>
+                                                  <span>Total Length: <span style={{ fontWeight: '500', color: '#0077B6' }}>
+                                                    {(() => {
+                                                      // Recalculate for display consistency
+                                                      const lengths = runningLengths[section._id] || [];
+                                                      let totalLengthCm = 0;
+                                                      
+                                                      lengths.forEach(l => {
+                                                        if (l.length) totalLengthCm += parseFloat(l.length) || 0;
+                                                      });
+                                                      
+                                                      if (totalLengthCm > 0) {
+                                                        return (totalLengthCm * CM_TO_FT_CONVERSION).toFixed(2);
+                                                      }
+                                                      
+                                                      return section.quantity || 0;
+                                                    })()}
+                                                     ft
+                                                  </span></span>
+                                                </div>
+                                                {(() => {
+                                                  // Calculate total length for display
+                                                  const lengths = runningLengths[section._id] || [];
+                                                  let totalLengthCm = 0;
+                                                  
+                                                  lengths.forEach(l => {
+                                                    if (l.length) totalLengthCm += parseFloat(l.length) || 0;
+                                                  });
+                                                  
+                                                  if (totalLengthCm > 0) {
+                                                    // Recalculate feet for display to ensure accuracy
+                                                    const calculatedFt = (totalLengthCm * CM_TO_FT_CONVERSION).toFixed(2);
+                                                    
+                                                    return (
+                                                      <div style={{ fontSize: '11px', color: '#777', marginTop: '2px' }}>
+                                                        (Total: {totalLengthCm} cm = {calculatedFt} ft)
+                                                      </div>
+                                                    );
+                                                  }
+                                                  return null;
+                                                })()}
+                                              </div>
+                                            </div>
+                                          );
+                                        } else {
+                                          // Default pieces input
+                                          return (
+                                            <input
+                                              type="number"
+                                              value={section.quantity || 0}
+                                              onChange={(e) => handleQuantityChange(editedEstimate.sections.findIndex(s => s === section), e.target.value)}
+                                              style={{
+                                                padding: '5px',
+                                                border: '1px solid #cbd5e1',
+                                                borderRadius: '4px',
+                                                width: '100px',
+                                                color: '#1e293b'
+                                              }}
+                                            />
+                                          );
+                                        }
+                                      })()
+                                    ) : (
+                                      <div>
+                                        {section.quantity}
+                                        {section.measurements && section.measurements.length > 0 && (
+                                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '5px' }}>
+                                            {section.measurements.map((m, i) => (
+                                              <div key={i}>{m.length}×{m.breadth}cm</div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td style={{padding: '12px'}}>
+                                    {isEditing ? (
+                                      <input
+                                        type="number"
+                                        value={section.unitPrice || 0}
+                                        onChange={(e) => handleSectionChange(editedEstimate.sections.findIndex(s => s === section), 'unitPrice', e.target.value)}
+                                        style={{
+                                          padding: '5px',
+                                          border: '1px solid #cbd5e1',
+                                          borderRadius: '4px',
+                                          width: '100px',
+                                          color: '#1e293b'
+                                        }}
+                                      />
+                                    ) : (
+                                      `Rs. ${section.unitPrice}`
+                                    )}
+                                  </td>
+                                  <td style={{padding: '12px'}}>Rs. {section.total}</td>
+                                  {isEditing && (
+                                    <td style={{padding: '12px'}}>
+                                      <StyledButton
+                                        onClick={() => handleRemoveSection(editedEstimate.sections.findIndex(s => s === section))}
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        style={{ 
+                                          padding: '5px 10px', 
+                                          fontSize: '14px',
+                                          background: '#ef4444',
+                                          color: 'white'
+                                        }}
+                                      >
+                                        Remove
+                                      </StyledButton>
+                                    </td>
+                                  )}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ))}
+                    </div>
+                  ));
+                })()}
+                
+                {isEditing && (
+                  <div style={{textAlign: 'center', marginTop: '20px'}}>
+                    <StyledButton
+                      onClick={handleAddSection}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      style={{
+                        backgroundColor: '#0077B6',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 16px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <span style={{ fontSize: '16px' }}>+</span> Add Custom Item
+                    </StyledButton>
+                  </div>
+                )}
+                
+                <table style={{
                   width: '100%',
                   borderCollapse: 'collapse',
-                  marginBottom: '30px'
+                  marginTop: '20px'
                 }}>
-                  <thead>
-                    <tr style={{backgroundColor: '#f8fafc'}}>
-                      <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Material</th>
-                      <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Category</th>
-                      <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Dimensions/Pieces</th>
-                      <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Price</th>
-                      <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Total</th>
-                      {isEditing && (
-                        <th style={{padding: '12px', borderBottom: '2px solid #e2e8f0', textAlign: 'left'}}>Actions</th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {editedEstimate.materials.map((material, index) => (
-                      <tr key={index} style={{borderBottom: '1px solid #e2e8f0'}}>
-                        <td style={{padding: '12px'}}>
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={material.name}
-                              onChange={(e) => handleMaterialChange(index, 'name', e.target.value)}
-                              style={{
-                                padding: '5px',
-                                border: '1px solid #cbd5e1',
-                                borderRadius: '4px',
-                                width: '100%',
-                                color: '#1e293b'
-                              }}
-                            />
-                          ) : (
-                            material.name
-                          )}
-                        </td>
-                        <td style={{padding: '12px'}}>
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={material.category}
-                              onChange={(e) => handleMaterialChange(index, 'category', e.target.value)}
-                              style={{
-                                padding: '5px',
-                                border: '1px solid #cbd5e1',
-                                borderRadius: '4px',
-                                width: '100%',
-                                color: '#1e293b'
-                              }}
-                            />
-                          ) : (
-                            <span className="category-badge">{material.category}</span>
-                          )}
-                        </td>
-                        <td style={{padding: '12px'}}>
-                          {material.measurementType === 'area' ? (
-                            isEditing ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                <div style={{ display: 'flex', gap: '20px', marginBottom: '10px' }}>
-                                  <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                    <input
-                                      type="radio"
-                                      name={`measurement-${index}`}
-                                      checked={material.measurementType === 'area'}
-                                      onChange={() => handleMaterialChange(index, 'measurementType', 'area')}
-                                      style={{ width: '16px', height: '16px' }}
-                                    />
-                                    Dimensions
-                                  </label>
-                                  <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                    <input
-                                      type="radio"
-                                      name={`measurement-${index}`}
-                                      checked={material.measurementType === 'pieces'}
-                                      onChange={() => handleMaterialChange(index, 'measurementType', 'pieces')}
-                                      style={{ width: '16px', height: '16px' }}
-                                    />
-                                    Pieces
-                                  </label>
-                                </div>
-                                <div style={{ display: 'flex', gap: '10px' }}>
-                                  <input
-                                    type="number"
-                                    value={material.dimensions.length}
-                                    onChange={(e) => handleDimensionChange(index, 'length', e.target.value)}
-                                    style={{
-                                      padding: '5px',
-                                      border: '1px solid #cbd5e1',
-                                      borderRadius: '4px',
-                                      width: '80px',
-                                      color: '#1e293b'
-                                    }}
-                                  />
-                                  <span>×</span>
-                                  <input
-                                    type="number"
-                                    value={material.dimensions.breadth}
-                                    onChange={(e) => handleDimensionChange(index, 'breadth', e.target.value)}
-                                    style={{
-                                      padding: '5px',
-                                      border: '1px solid #cbd5e1',
-                                      borderRadius: '4px',
-                                      width: '80px',
-                                      color: '#1e293b'
-                                    }}
-                                  />
-                                  <span>cm</span>
-                                  <span className="area-value">({material.dimensions.area} sq ft)</span>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="dimensions-info">
-                                <span>{material.dimensions.length} × {material.dimensions.breadth} cm</span>
-                                <span className="area-value">({material.dimensions.area} sq ft)</span>
-                              </div>
-                            )
-                          ) : (
-                            isEditing ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                <div style={{ display: 'flex', gap: '20px', marginBottom: '10px' }}>
-                                  <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                    <input
-                                      type="radio"
-                                      name={`measurement-${index}`}
-                                      checked={material.measurementType === 'area'}
-                                      onChange={() => handleMaterialChange(index, 'measurementType', 'area')}
-                                      style={{ width: '16px', height: '16px' }}
-                                    />
-                                    Dimensions
-                                  </label>
-                                  <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                    <input
-                                      type="radio"
-                                      name={`measurement-${index}`}
-                                      checked={material.measurementType === 'pieces'}
-                                      onChange={() => handleMaterialChange(index, 'measurementType', 'pieces')}
-                                      style={{ width: '16px', height: '16px' }}
-                                    />
-                                    Pieces
-                                  </label>
-                                </div>
-                                <input
-                                  type="number"
-                                  value={material.dimensions.pieces}
-                                  onChange={(e) => handleDimensionChange(index, 'pieces', e.target.value)}
-                                  style={{
-                                    padding: '5px',
-                                    border: '1px solid #cbd5e1',
-                                    borderRadius: '4px',
-                                    width: '100px',
-                                    color: '#1e293b'
-                                  }}
-                                />
-                              </div>
-                            ) : (
-                              <span>{material.dimensions.pieces} pieces</span>
-                            )
-                          )}
-                        </td>
-                        <td style={{padding: '12px'}}>
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={material.price}
-                              onChange={(e) => handleMaterialChange(index, 'price', e.target.value)}
-                              style={{
-                                padding: '5px',
-                                border: '1px solid #cbd5e1',
-                                borderRadius: '4px',
-                                width: '100px',
-                                color: '#1e293b'
-                              }}
-                            />
-                          ) : (
-                            `₹${material.price}`
-                          )}
-                        </td>
-                        <td style={{padding: '12px'}}>₹{material.total}</td>
-                        {isEditing && (
-                          <td style={{padding: '12px'}}>
-                            <StyledButton
-                              onClick={() => handleRemoveMaterial(index)}
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              style={{ 
-                                padding: '5px 10px', 
-                                fontSize: '14px',
-                                background: '#ef4444',
-                                color: 'white'
-                              }}
-                            >
-                              Remove
-                            </StyledButton>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                    {isEditing && (
-                      <tr>
-                        <td colSpan={isEditing ? 6 : 5} style={{padding: '12px', textAlign: 'center'}}>
-                          <StyledButton
-                            onClick={handleAddMaterial}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            style={{ 
-                              padding: '5px 10px', 
-                              fontSize: '14px',
-                              background: '#10b981',
-                              color: 'white'
-                            }}
-                          >
-                            Add New Material
-                          </StyledButton>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
                   <tfoot>
                     <tr>
-                      <td colSpan="4" style={{
+                      <td colSpan={isEditing ? 4 : 3} style={{
                         padding: '12px',
                         textAlign: 'right',
                         fontWeight: 'bold',
                         color: '#1e293b'
                       }}>Sub Total</td>
                       <td style={{
-                        padding: '12px',
+                        padding: '12px 16px 12px 12px',
                         fontWeight: 'bold',
                         color: '#1e293b',
-                        fontSize: '16px'
-                      }}>₹{subTotal.toFixed(2)}</td>
+                        fontSize: '16px',
+                        textAlign: 'right',
+                        width: '120px'
+                      }}>Rs. {subTotal.toFixed(2)}</td>
+                      {isEditing && <td></td>}
                     </tr>
-                    {(showAllDiscounts || subTotal !== grandTotal) && (
-                      <tr>
-                        <td colSpan="4" style={{
+                    <tr>
+                        <td colSpan={isEditing ? 4 : 3} style={{
                           padding: '12px',
                           textAlign: 'right',
                           color: '#1e293b'
@@ -1001,29 +2218,35 @@ function EstimatePreview() {
                           </div>
                         </td>
                         <td style={{
-                          padding: '12px',
+                          padding: '12px 16px 12px 12px',
                           color: '#1e293b',
-                          fontSize: '14px'
+                          fontSize: '14px',
+                          textAlign: 'right',
+                          width: '120px'
                         }}>
-                          {showDiscount && discountAmount > 0 && `-₹${discountAmount}`}
+                          {showDiscount && discountAmount > 0 && `-Rs. ${discountAmount}`}
                         </td>
+                        {isEditing && <td></td>}
                       </tr>
-                    )}
                     <tr>
-                      <td colSpan="4" style={{
+                      <td colSpan={isEditing ? 4 : 3} style={{
                         padding: '12px',
                         textAlign: 'right',
                         fontWeight: 'bold',
                         color: '#1e293b'
                       }}>Grand Total</td>
                       <td style={{
-                        padding: '12px',
+                        padding: '12px 16px 12px 12px',
                         fontWeight: 'bold',
                         color: '#1e293b',
-                        fontSize: '16px'
+                        fontSize: '16px',
+                        textAlign: 'right',
+                        width: '120px',
+                        borderTop: '2px solid #e2e8f0'
                       }}>
-                        ₹{Math.floor(grandTotal)}
+                        Rs. {Math.ceil(grandTotal)}
                       </td>
+                      {isEditing && <td></td>}
                     </tr>
                   </tfoot>
                 </table>
@@ -1116,6 +2339,303 @@ function EstimatePreview() {
           </Card>
         </ContentWrapper>
       </PageContainer>
+
+      {/* Custom Item Modal */}
+      {showCustomModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+            padding: '24px',
+            width: '90%',
+            maxWidth: '550px',
+            maxHeight: '90vh',
+            overflow: 'auto'
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              marginBottom: '24px'
+            }}>
+              <h3 style={{ 
+                fontSize: '18px', 
+                fontWeight: '600', 
+                margin: 0,
+                color: '#333'
+              }}>Add Custom Item</h3>
+              <button
+                onClick={() => setShowCustomModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#666'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Custom Item Form */}
+            <div style={{ display: 'grid', gap: '16px' }}>
+              {/* Category */}
+              <div>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: '8px', 
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#444'
+                }}>
+                  Category *
+                </label>
+                <input
+                  type="text"
+                  value={customItem.category}
+                  onChange={(e) => handleCustomItemChange('category', e.target.value)}
+                  placeholder="Enter category name"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                    color: '#000'
+                  }}
+                />
+              </div>
+
+              {/* Subcategory */}
+              <div>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: '8px', 
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#444'
+                }}>
+                  Subcategory *
+                </label>
+                <input
+                  type="text"
+                  value={customItem.subcategory}
+                  onChange={(e) => handleCustomItemChange('subcategory', e.target.value)}
+                  placeholder="Enter subcategory name"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                    color: '#000'
+                  }}
+                />
+              </div>
+
+              {/* Material */}
+              <div>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: '8px', 
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#444'
+                }}>
+                  Material
+                </label>
+                <input
+                  type="text"
+                  value={customItem.material}
+                  onChange={(e) => handleCustomItemChange('material', e.target.value)}
+                  placeholder="Enter material name"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                    color: '#000'
+                  }}
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: '8px', 
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#444'
+                }}>
+                  Description *
+                </label>
+                <input
+                  type="text"
+                  value={customItem.description}
+                  onChange={(e) => handleCustomItemChange('description', e.target.value)}
+                  placeholder="Enter item description"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                    color: '#000'
+                  }}
+                />
+              </div>
+
+              {/* Price */}
+              <div>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: '8px', 
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#444'
+                }}>
+                  Unit Price *
+                </label>
+                <input
+                  type="number"
+                  value={customItem.price}
+                  onChange={(e) => handleCustomItemChange('price', e.target.value)}
+                  placeholder="Enter price"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                    color: '#000'
+                  }}
+                />
+              </div>
+
+              {/* Unit Type Radio */}
+              <div>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: '8px', 
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#444'
+                }}>
+                  Unit Type
+                </label>
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '16px',
+                  flexWrap: 'wrap'
+                }}>
+                  <label style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}>
+                    <input
+                      type="radio"
+                      name="unitType"
+                      value="pieces"
+                      checked={customItem.unitType === "pieces"}
+                      onChange={() => handleCustomItemChange('unitType', 'pieces')}
+                    />
+                    Pieces
+                  </label>
+                  <label style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}>
+                    <input
+                      type="radio"
+                      name="unitType"
+                      value="area"
+                      checked={customItem.unitType === "area"}
+                      onChange={() => handleCustomItemChange('unitType', 'area')}
+                    />
+                    Area (L × W)
+                  </label>
+                  <label style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}>
+                    <input
+                      type="radio"
+                      name="unitType"
+                      value="running_sqft"
+                      checked={customItem.unitType === "running_sqft"}
+                      onChange={() => handleCustomItemChange('unitType', 'running_sqft')}
+                    />
+                    Running Sq. Feet
+                  </label>
+                </div>
+              </div>
+
+              {/* Form Actions */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'flex-end',
+                gap: '12px',
+                marginTop: '8px'
+              }}>
+                <button
+                  onClick={() => setShowCustomModal(false)}
+                  style={{
+                    padding: '10px 16px',
+                    borderRadius: '6px',
+                    border: '1px solid #ddd',
+                    backgroundColor: '#fff',
+                    color: '#333',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddCustomItem}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    backgroundColor: '#0077B6',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Add Item
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

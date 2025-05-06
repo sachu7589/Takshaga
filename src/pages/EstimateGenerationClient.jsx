@@ -26,6 +26,9 @@ function EstimateGenerationClient() {
 
   // Add state for multiple measurements
   const [multipleMeasurements, setMultipleMeasurements] = useState({});
+  
+  // Add state for running feet measurements
+  const [runningLengths, setRunningLengths] = useState({});
 
   // Custom Item Modal States
   const [showCustomModal, setShowCustomModal] = useState(false);
@@ -305,6 +308,92 @@ function EstimateGenerationClient() {
     });
   };
 
+  // Add handler for running feet measurements
+  const handleAddRunningLength = (sectionId) => {
+    setRunningLengths(prev => {
+      const currentLengths = prev[sectionId] || [];
+      return {
+        ...prev,
+        [sectionId]: [
+          ...currentLengths,
+          { length: '' }
+        ]
+      };
+    });
+  };
+
+  // Update running length measurement
+  const updateRunningLength = (sectionId, index, value) => {
+    setRunningLengths(prev => {
+      const newLengths = [...(prev[sectionId] || [])];
+      
+      if (!newLengths[index]) {
+        newLengths[index] = { length: '' };
+      }
+      
+      newLengths[index] = {
+        ...newLengths[index],
+        length: value
+      };
+      
+      // Calculate the sum of all lengths
+      let totalLengthCm = 0;
+      
+      newLengths.forEach(l => {
+        if (l.length) totalLengthCm += parseFloat(l.length) || 0;
+      });
+      
+      // Convert cm to feet (1 cm = 0.0328084 ft)
+      const totalLengthFt = (totalLengthCm * 0.0328084).toFixed(2);
+      
+      // Update the quantity with the total length in feet
+      setSectionDetails(prevDetails => ({
+        ...prevDetails,
+        [sectionId]: {
+          ...prevDetails[sectionId],
+          quantity: totalLengthFt
+        }
+      }));
+      
+      return {
+        ...prev,
+        [sectionId]: newLengths
+      };
+    });
+  };
+
+  // Remove running length measurement
+  const removeRunningLength = (sectionId, index) => {
+    setRunningLengths(prev => {
+      const newLengths = [...(prev[sectionId] || [])];
+      newLengths.splice(index, 1);
+      
+      // Calculate the sum of all lengths
+      let totalLengthCm = 0;
+      
+      newLengths.forEach(l => {
+        if (l.length) totalLengthCm += parseFloat(l.length) || 0;
+      });
+      
+      // Convert cm to feet (1 cm = 0.0328084 ft)
+      const totalLengthFt = (totalLengthCm * 0.0328084).toFixed(2);
+      
+      // Update the quantity with the total length in feet
+      setSectionDetails(prevDetails => ({
+        ...prevDetails,
+        [sectionId]: {
+          ...prevDetails[sectionId],
+          quantity: totalLengthFt
+        }
+      }));
+      
+      return {
+        ...prev,
+        [sectionId]: newLengths
+      };
+    });
+  };
+
   // Helper function to determine unit type based on section data
   const getSectionUnitType = (section) => {
     // This is just an example logic - adjust based on your actual data structure
@@ -313,6 +402,7 @@ function EstimateGenerationClient() {
     // If no explicit unitType, try to infer from other properties or names
     const nameInLowerCase = (section.name || section.description || section.sectionName || '').toLowerCase();
     if (nameInLowerCase.includes('area') || nameInLowerCase.includes('square')) return 'area';
+    if (nameInLowerCase.includes('running') || nameInLowerCase.includes('r.ft') || nameInLowerCase.includes('rft')) return 'running_sqft';
     if (nameInLowerCase.includes('piece') || nameInLowerCase.includes('item') || nameInLowerCase.includes('unit')) return 'pieces';
     
     // Default to pieces
@@ -1105,6 +1195,109 @@ function EstimateGenerationClient() {
                                                 return (
                                                   <div style={{ fontSize: '11px', color: '#777', marginTop: '2px' }}>
                                                     (Total: {totalLength} cm × {totalBreadth} cm)
+                                                  </div>
+                                                );
+                                              }
+                                              return null;
+                                            })()}
+                                          </div>
+                                        </div>
+                                      ) : getSectionUnitType(section) === 'running_sqft' ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                          {/* Running lengths measurements */}
+                                          {(runningLengths[section._id] || []).map((item, index) => (
+                                            <div key={index} style={{ 
+                                              display: 'flex', 
+                                              alignItems: 'center', 
+                                              gap: '8px',
+                                              backgroundColor: '#f8f9fa',
+                                              padding: '6px 10px',
+                                              borderRadius: '6px'
+                                            }}>
+                                              <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                <input 
+                                                  type="number"
+                                                  placeholder="Length (cm)"
+                                                  value={item.length}
+                                                  onChange={(e) => updateRunningLength(section._id, index, e.target.value)}
+                                                  style={{
+                                                    width: '100px',
+                                                    padding: '6px',
+                                                    border: '1px solid #ddd',
+                                                    borderRadius: '6px',
+                                                    textAlign: 'center',
+                                                    color: '#000'
+                                                  }}
+                                                />
+                                              </div>
+                                              <button
+                                                onClick={() => removeRunningLength(section._id, index)}
+                                                style={{
+                                                  background: 'none',
+                                                  border: 'none',
+                                                  color: '#dc3545',
+                                                  cursor: 'pointer',
+                                                  fontSize: '16px',
+                                                  marginLeft: 'auto'
+                                                }}
+                                              >
+                                                ×
+                                              </button>
+                                            </div>
+                                          ))}
+                                          
+                                          {/* If no running length entries yet, show a prompt */}
+                                          {(!runningLengths[section._id] || runningLengths[section._id].length === 0) && (
+                                            <div style={{ 
+                                              fontSize: '13px', 
+                                              color: '#666', 
+                                              fontStyle: 'italic' 
+                                            }}>
+                                              Add one or more length measurements
+                                            </div>
+                                          )}
+                                          
+                                          {/* Add running length button */}
+                                          <button
+                                            onClick={() => handleAddRunningLength(section._id)}
+                                            style={{
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '6px',
+                                              background: 'none',
+                                              border: '1px dashed #0077B6',
+                                              borderRadius: '6px',
+                                              padding: '4px 10px',
+                                              fontSize: '12px',
+                                              color: '#0077B6',
+                                              fontWeight: '500',
+                                              cursor: 'pointer',
+                                              marginTop: '4px',
+                                              alignSelf: 'flex-start'
+                                            }}
+                                          >
+                                            <span>+</span> Add Length
+                                          </button>
+                                          
+                                          <div style={{ fontSize: '12px', color: '#555', marginTop: '4px' }}>
+                                            Total Length: <span style={{ fontWeight: '500', color: '#0077B6' }}>
+                                              {sectionDetails[section._id]?.quantity || 0} ft
+                                            </span>
+                                            {/* Add summary of calculations */}
+                                            {(() => {
+                                              // Calculate total length in cm
+                                              let totalLengthCm = 0;
+                                              
+                                              // Add from running lengths
+                                              const lengths = runningLengths[section._id] || [];
+                                              lengths.forEach(l => {
+                                                if (l.length) totalLengthCm += parseFloat(l.length) || 0;
+                                              });
+                                              
+                                              if (totalLengthCm > 0) {
+                                                return (
+                                                  <div style={{ fontSize: '11px', color: '#777', marginTop: '2px' }}>
+                                                    (Total: {totalLengthCm} cm)
                                                   </div>
                                                 );
                                               }

@@ -42,9 +42,14 @@ function ClientDetails() {
         });
         
         if (response.data.stage > 0) {
-          const grandTotalResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/estimates/client/${id}/grandTotal`);
-          if (grandTotalResponse.data.success && grandTotalResponse.data.grandTotals) {
-            setGrandTotals(grandTotalResponse.data.grandTotals);
+          try {
+            const grandTotalResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/estimates/client/${id}/grandTotal`);
+            if (grandTotalResponse.data && grandTotalResponse.data.grandTotal) {
+              // Set the grandTotal value from the response in an array for display
+              setGrandTotals([grandTotalResponse.data.grandTotal]);
+            }
+          } catch (grandTotalError) {
+            console.error('Error fetching grand total:', grandTotalError);
           }
         }
       } catch (error) {
@@ -86,8 +91,8 @@ function ClientDetails() {
     try {
       const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/estimates/client/${clientId}`);
       
-      if (response.data.success && response.data.count > 0) {
-        navigate(`/estimatePreview/${response.data.data[0]}`);
+      if (response.data && response.data.length > 0) {
+        navigate(`/estimatePreview/${response.data[0]._id}`);
       } else {
         Swal.fire({
           title: 'No Estimates',
@@ -100,7 +105,7 @@ function ClientDetails() {
       console.error('Error fetching estimates:', error);
       Swal.fire({
         title: 'Error!',
-        text: error.response?.data?.error || 'Failed to retrieve estimate information',
+        text: error.response?.data?.message || 'Failed to retrieve estimate information',
         icon: 'error',
         confirmButtonText: 'OK'
       });
@@ -343,7 +348,9 @@ function ClientDetails() {
                   {grandTotals.length > 0 && (
                     <div className="estimate-amount">
                       <span className="amount-label">Grand Total:</span>
-                      <span className="amount-value">₹{grandTotals.reduce((a, b) => a + b, 0).toLocaleString()}</span>
+                      <span className="amount-value">
+                        ₹{parseFloat(grandTotals[0]).toLocaleString()}
+                      </span>
                     </div>
                   )}
                 </>
