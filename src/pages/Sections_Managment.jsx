@@ -254,50 +254,51 @@ function Sections_Managment() {
               <div className="sections-loading-spinner"></div>
             </div>
           ) : (
-            <div className="sections-grid">
+            <div className="sections-table-container">
               {sections.length > 0 ? (
-                sections.map((section) => (
-                  <div key={section._id} className="section-item-card">
-                    <div className="section-item-header">
-                      <h3>{section.materialName}</h3>
-                      <div className="section-item-actions">
-                        <button 
-                          className="section-action-btn section-edit-btn"
-                          onClick={() => openEditModal(section)}
-                        >
-                          <Pencil size={16} />
-                        </button>
-                        <button 
-                          className="section-action-btn section-delete-btn"
-                          onClick={() => openDeleteModal(section)}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="section-item-content">
-                      <p className="section-item-description">{section.description}</p>
-                      <div className="section-item-details">
-                        <div className="section-detail-item">
-                          <span className="section-detail-label">Category</span>
-                          <span className="section-detail-value">{section.category}</span>
-                        </div>
-                        <div className="section-detail-item">
-                          <span className="section-detail-label">Subcategory</span>
-                          <span className="section-detail-value">{section.subcategory}</span>
-                        </div>
-                        <div className="section-detail-item">
-                          <span className="section-detail-label">Price</span>
-                          <span className="section-detail-value">₹{section.price}</span>
-                        </div>
-                        <div className="section-detail-item">
-                          <span className="section-detail-label">Unit Type</span>
-                          <span className="section-detail-value">{section.unitType}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))
+                <table className="sections-table">
+                  <thead>
+                    <tr>
+                      <th>Material Name</th>
+                      <th>Description</th>
+                      <th>Category</th>
+                      <th>Subcategory</th>
+                      <th>Price</th>
+                      <th>Unit Type</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sections.map((section) => (
+                      <tr key={section._id}>
+                        <td>{section.materialName}</td>
+                        <td className="description-cell">{section.description}</td>
+                        <td>{section.category}</td>
+                        <td>{section.subcategory}</td>
+                        <td>₹{section.price}</td>
+                        <td>{section.unitType}</td>
+                        <td>
+                          <div className="table-actions">
+                            <button 
+                              className="section-action-btn section-edit-btn"
+                              onClick={() => openEditModal(section)}
+                              title="Edit"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            <button 
+                              className="section-action-btn section-delete-btn"
+                              onClick={() => openDeleteModal(section)}
+                              title="Deactivate"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : (
                 <div className="no-data">
                   No sections found. Add a new section to get started.
