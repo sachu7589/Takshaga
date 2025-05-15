@@ -1212,40 +1212,61 @@ function EstimatePreview() {
       const doc = new jsPDF();
       
       // Add border to first page
+      doc.setDrawColor(41, 128, 185); // Blue border
+      doc.setLineWidth(1.5);
       doc.rect(5, 5, 200, 287);
       
+      // Add header background
+      doc.setFillColor(52, 152, 219); // Light blue header
+      doc.rect(5, 5, 200, 45, 'F');
+      
       // Add logo and company details only on first page
-      const logoUrl = '/takshaga_white.png';
-      doc.addImage(logoUrl, 'PNG', 8, 10, 50, 38);
+      const logoUrl = '/takshaga.png';
+      // x: 10, y: 12, width: 40, height: 25 (reduced height)
+      doc.addImage(logoUrl, 'PNG', 10, 18, 40, 25);
       
-      // Add company details below logo
-      doc.setFontSize(10);
-      doc.setTextColor(100, 116, 139);
-      doc.text("Takshaga", 20, 40);
-      doc.text("Upputhara po", 20, 45);
-      doc.text("Idukki", 20, 50);
-      doc.text("685505", 20, 55);
+      // Add company details below logo with improved styling
+      doc.setFontSize(11);
+      doc.setTextColor(255, 255, 255); // White text on blue background
+      doc.setFont(undefined, 'bold');
+      doc.text("Takshaga", 70, 20);
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'normal');
+      doc.text("Upputhara po", 70, 27);
+      doc.text("Idukki", 70, 34);
+      doc.text("685505", 70, 41);
 
-      // Add contact details on right side
-      doc.text("Phone: +91 9846660624", 140, 40);
-      doc.text("Phone: +91 9544344332", 140, 45);
-      doc.text("www.takshaga.com", 140, 50);
+      // Add contact details on right side with text instead of icons
+      doc.setFontSize(9);
+      doc.text("Phone: +91 9846660624", 140, 27);
+      doc.text("Phone: +91 9544344332", 140, 34);
+      doc.text("Website: www.takshaga.com", 140, 41);
       
-      // Add estimate title
-      doc.setFontSize(14);
-      doc.setTextColor(0);
-      doc.text("ESTIMATE", 105, 70, { align: "center" });
+      // Add estimate details section
+      doc.setFillColor(240, 240, 240); // Light gray background
+      doc.roundedRect(5, 55, 200, 25, 3, 3, 'F');
       
       // Add estimate details on left
       doc.setFontSize(10);
-      doc.text(`Invoice No: ${estimate.name || 'EST-' + new Date().getTime()}`, 20, 85);
-      doc.text("Date: " + new Date(estimate.createdAt).toLocaleDateString(), 20, 90);
+      doc.setTextColor(0);
+      doc.setFont(undefined, 'bold');
+      doc.text(`Invoice No: ${estimate.name || 'EST-' + new Date().getTime()}`, 20, 65);
+      doc.setFont(undefined, 'normal');
+      doc.text("Date: " + new Date(estimate.createdAt).toLocaleDateString(), 20, 75);
 
       // Add client details on right with "To:" prefix
-      doc.text("To:", 155, 85);
-      doc.text(estimate.clientName, 160, 90);
+      doc.setFont(undefined, 'bold');
+      doc.text("To:", 155, 65);
+      doc.setFont(undefined, 'normal');
+      doc.text(estimate.clientName, 160, 75);
       
-      let yPos = 110;
+      // Add ESTIMATE heading centered with proper spacing
+      doc.setFontSize(14);
+      doc.setTextColor(52, 152, 219); // Blue text
+      doc.setFont(undefined, 'bold');
+      doc.text("ESTIMATE", 105, 90, { align: "center" });
+      
+      let yPos = 100; // Reduced spacing after the ESTIMATE heading
       let currentPage = 1;
 
       // Organize sections by category and subcategory like in the UI
@@ -1271,24 +1292,31 @@ function EstimatePreview() {
         if (yPos > 250) {
           doc.addPage();
           currentPage++;
+          doc.setDrawColor(41, 128, 185); // Blue border
+          doc.setLineWidth(1.5);
           doc.rect(5, 5, 200, 287); // Add border to new page
           yPos = 20; // Reset y position for new page
         }
 
-        // Add category heading
-        doc.setFontSize(12);
-        doc.setTextColor(30, 41, 59);
+        // Add category heading with modern styling
+        doc.setFillColor(52, 152, 219); // Blue background
+        doc.rect(10, yPos - 5, 190, 10, 'F');
+        doc.setFontSize(11);
+        doc.setTextColor(255, 255, 255); // White text
         doc.setFont(undefined, 'bold');
         doc.text(category, 20, yPos);
-        yPos += 8;
+        yPos += 15; // Increased spacing after category
 
         // Process each subcategory and its sections
         Object.entries(subcategories).forEach(([subcategory, sections]) => {
-          // Add subcategory name
+          // Add subcategory name with styling
+          doc.setFillColor(236, 240, 241); // Light gray background
+          doc.rect(15, yPos - 5, 180, 8, 'F');
           doc.setFontSize(10);
-          doc.setFont(undefined, 'normal');
+          doc.setTextColor(44, 62, 80); // Dark text
+          doc.setFont(undefined, 'bold');
           doc.text(subcategory, 25, yPos);
-          yPos += 7;
+          yPos += 10; // Increased spacing after subcategory
 
           // Create table data for this subcategory
           const tableData = sections.map(section => {
@@ -1348,7 +1376,14 @@ function EstimatePreview() {
             head: [['Description', 'Dimensions/Qty', 'Area/Unit', 'Price', 'Total']],
             body: tableData,
             theme: 'grid',
-            headStyles: { fillColor: [248, 250, 252], textColor: [0, 0, 0] },
+            headStyles: { 
+              fillColor: [52, 152, 219], 
+              textColor: [255, 255, 255],
+              fontStyle: 'bold'
+            },
+            alternateRowStyles: {
+              fillColor: [240, 248, 255] // Light blue for alternate rows
+            },
             styles: { fontSize: 8 },
             pageBreak: 'auto',
             margin: { left: 20, right: 20 },
@@ -1356,6 +1391,8 @@ function EstimatePreview() {
               // Add border to new pages created by autoTable
               if (data.pageNumber > currentPage) {
                 currentPage = data.pageNumber;
+                doc.setDrawColor(41, 128, 185); // Blue border
+                doc.setLineWidth(1.5);
                 doc.rect(5, 5, 200, 287);
               }
             }
@@ -1370,43 +1407,48 @@ function EstimatePreview() {
         return total + parseFloat(section.total || 0);
       }, 0);
 
-      // Add sub-total
-      doc.setDrawColor(226, 232, 240);
+      // Add sub-total with styling
+      doc.setDrawColor(189, 195, 199); // Light gray line
+      doc.setLineWidth(0.5);
       doc.line(20, yPos - 5, 190, yPos - 5);
       
       doc.setFontSize(10);
-      doc.setTextColor(30, 41, 59);
+      doc.setTextColor(44, 62, 80); // Dark text
       doc.setFont(undefined, 'bold');
-      doc.text(`Sub Total:`, 150, yPos);
+      doc.text(`Sub Total:`, 149, yPos);
       
       // Simple formatting with Rs. prefix
       const formattedSubTotal = `Rs. ${subTotal.toFixed(2)}`;
-      doc.text(formattedSubTotal, 190, yPos, { align: 'right' });
+      doc.text(formattedSubTotal, 191, yPos, { align: 'right' });
       
       // Add discount if exists
       if (estimate.discount && estimate.discount > 0) {
         yPos += 7;
-        doc.text(`Discount:`, 150, yPos);
+        doc.text(``, 150, yPos);
         
         // Simple formatting with Rs. prefix for discount
-        const formattedDiscount = `Rs. ${estimate.discount.toFixed(2)}`;
+        const formattedDiscount = `- ${estimate.discount.toFixed(2)}`;
         doc.text(formattedDiscount, 190, yPos, { align: 'right' });
       }
       
-      // Add grand total
+      // Add grand total without background highlight
       yPos += 7;
-      doc.setFontSize(10);
-      doc.text(`Grand Total:`, 150, yPos);
+      doc.setFontSize(12); // Increased font size for grand total
+      doc.setTextColor(44, 62, 80); // Dark text
+      doc.setFont(undefined, 'bold');
+      doc.text(`Grand Total:`, 135, yPos);
       
       // Simple formatting with Rs. prefix for grand total
       const formattedGrandTotal = `Rs. ${Math.floor(estimate.grandTotal).toFixed(2)}`;
-      doc.text(formattedGrandTotal, 193, yPos, { align: 'right' });
+      doc.text(formattedGrandTotal, 190, yPos, { align: 'right' });
       
       // Always add notes section on a new page or with sufficient space
       // Check if we need to add a page break before notes section
       if (yPos > 200) {
         doc.addPage();
         currentPage++;
+        doc.setDrawColor(41, 128, 185); // Blue border
+        doc.setLineWidth(1.5);
         doc.rect(5, 5, 200, 287); // Add border to new page
         yPos = 30; // Reset y position for new page with more space for notes
       } else {
@@ -1414,17 +1456,19 @@ function EstimatePreview() {
         yPos += 30;
       }
       
-      // Add Notes and Terms section
+      // Add Notes and Terms section with styling
+      doc.setFillColor(52, 152, 219); // Blue background
+      doc.rect(10, yPos - 5, 190, 10, 'F');
       doc.setFontSize(12);
-      doc.setTextColor(30, 41, 59);
+      doc.setTextColor(255, 255, 255); // White text
       doc.setFont(undefined, 'bold');
       doc.text("Notes & Terms", 20, yPos);
       yPos += 10;
       
-      // Add standard terms
+      // Add standard terms with styling
       doc.setFontSize(9);
       doc.setFont(undefined, 'normal');
-      doc.setTextColor(60, 60, 60);
+      doc.setTextColor(44, 62, 80); // Dark text
       
       const standardTerms = [
         "• Price includes materials, transport, labor and service",
@@ -1460,29 +1504,40 @@ function EstimatePreview() {
         yPos += 15;
       }
       
-      // Add signature section if there's enough space
+      // Add signature section with styling
       if (yPos < 250) {
-        doc.setDrawColor(200, 200, 200);
+        doc.setDrawColor(189, 195, 199); // Light gray line
+        doc.setLineWidth(0.5);
         doc.line(20, yPos, 80, yPos);
         doc.line(120, yPos, 180, yPos);
         
         yPos += 5;
         doc.setFontSize(8);
+        doc.setTextColor(44, 62, 80); // Dark text
         doc.text("Customer Signature", 20, yPos);
         doc.text("For Takshaga", 120, yPos);
       }
       
-      // Add thank you note at the bottom
+      // Add thank you note at the bottom with styling
       yPos = 270;
+      doc.setFillColor(52, 152, 219); // Blue background
+      doc.roundedRect(65, yPos - 5, 80, 10, 3, 3, 'F');
       doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
+      doc.setTextColor(255, 255, 255); // White text
       doc.text("Thank you for your business!", 105, yPos, { align: "center" });
       
       // Add page numbers to all pages
       const pageCount = doc.internal.getNumberOfPages();
       for(let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
+        
+        // Ensure every page has a border
+        doc.setDrawColor(41, 128, 185); // Blue border
+        doc.setLineWidth(1.5);
+        doc.rect(5, 5, 200, 287);
+        
         doc.setFontSize(8);
+        doc.setTextColor(44, 62, 80); // Dark text
         doc.text(`Page ${i} of ${pageCount}`, 105, 290, { align: 'center' });
       }
 
