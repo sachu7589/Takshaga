@@ -127,7 +127,7 @@ const Register = () => {
         data.append('image', formData.image)
       }
 
-      const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/users/register`, data, {
+      const response = await axios.post(`https://takshaga-backend-q7tg.onrender.com/api/users/register`, data, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
