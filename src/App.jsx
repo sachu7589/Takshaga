@@ -17,6 +17,8 @@ import ClientDetails from './pages/ClientDetails'
 import ClientManage from './pages/ClientManage'
 import EstimateGenerationClient from './pages/EstimateGenerationClient'
 import EstimatePreview from './pages/EstimatePreview'
+import CompletedProjects from './pages/CompletedProjects'
+import CompletedProjectDetails from './pages/CompletedProjectDetails'
 
 function App() {
   return (
@@ -40,6 +42,8 @@ function App() {
         <Route path='/register' element={<Register/>}/>
         <Route path='/client-details/:id' element={<ClientDetails/>}/>
         <Route path='/estimatePreview/:id' element={<EstimatePreview/>}/>
+        <Route path='/completed-projects' element={<CompletedProjects/>}/>
+        <Route path='/completed-project-details/:id' element={<CompletedProjectDetails/>}/>
       </Routes>
     </BrowserRouter>
   )

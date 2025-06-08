@@ -167,24 +167,28 @@ function EstimateGenerationClient() {
       // Calculate quantity if length and breadth are set, including multiple measurements
       if (field === 'length' || field === 'breadth') {
         const details = newDetails[sectionId];
+        let totalAreaFt = 0;
         
-        // Calculate the sums including multiple measurements
-        let totalLength = parseFloat(details.length) || 0;
-        let totalBreadth = parseFloat(details.breadth) || 0;
+        // Calculate primary measurement area
+        const primaryLength = parseFloat(details.length) || 0;
+        const primaryBreadth = parseFloat(details.breadth) || 0;
+        if (primaryLength > 0 && primaryBreadth > 0) {
+          const primaryAreaCm = primaryLength * primaryBreadth;
+          totalAreaFt += primaryAreaCm * 0.00107639;
+        }
         
-        // Add lengths and breadths from multiple measurements
+        // Add areas from multiple measurements
         const measurements = multipleMeasurements[sectionId] || [];
         measurements.forEach(m => {
-          if (m.length) totalLength += parseFloat(m.length) || 0;
-          if (m.breadth) totalBreadth += parseFloat(m.breadth) || 0;
+          const mLength = parseFloat(m.length) || 0;
+          const mBreadth = parseFloat(m.breadth) || 0;
+          if (mLength > 0 && mBreadth > 0) {
+            const areaCm = mLength * mBreadth;
+            totalAreaFt += areaCm * 0.00107639;
+          }
         });
         
-        if (totalLength > 0 && totalBreadth > 0) {
-          // Calculate area in cm² then convert to ft²
-          const areaCm = totalLength * totalBreadth;
-          const areaFt = (areaCm * 0.00107639).toFixed(2);
-          newDetails[sectionId].quantity = areaFt;
-        }
+        newDetails[sectionId].quantity = totalAreaFt.toFixed(2);
       }
 
       return newDetails;
@@ -220,37 +224,32 @@ function EstimateGenerationClient() {
         [field]: value
       };
       
-      // Calculate the sums of all lengths and breadths
-      let totalLength = 0;
-      let totalBreadth = 0;
+      let totalAreaFt = 0;
       
+      // Calculate primary measurement area
+      const primaryLength = parseFloat(sectionDetails[sectionId]?.length) || 0;
+      const primaryBreadth = parseFloat(sectionDetails[sectionId]?.breadth) || 0;
+      if (primaryLength > 0 && primaryBreadth > 0) {
+        const primaryAreaCm = primaryLength * primaryBreadth;
+        totalAreaFt += primaryAreaCm * 0.00107639;
+      }
+      
+      // Calculate area for each additional measurement
       newMeasurements.forEach(m => {
-        if (m.length) totalLength += parseFloat(m.length) || 0;
-        if (m.breadth) totalBreadth += parseFloat(m.breadth) || 0;
+        const mLength = parseFloat(m.length) || 0;
+        const mBreadth = parseFloat(m.breadth) || 0;
+        if (mLength > 0 && mBreadth > 0) {
+          const areaCm = mLength * mBreadth;
+          totalAreaFt += areaCm * 0.00107639;
+        }
       });
-      
-      // Add the primary measurement if it exists
-      if (sectionDetails[sectionId]?.length) {
-        totalLength += parseFloat(sectionDetails[sectionId].length) || 0;
-      }
-      if (sectionDetails[sectionId]?.breadth) {
-        totalBreadth += parseFloat(sectionDetails[sectionId].breadth) || 0;
-      }
-      
-      // Calculate total area using the sums
-      let totalArea = 0;
-      if (totalLength > 0 && totalBreadth > 0) {
-        // Calculate area in cm² then convert to ft²
-        const areaCm = totalLength * totalBreadth;
-        totalArea = (areaCm * 0.00107639).toFixed(2);
-      }
       
       // Update the quantity with the total area
       setSectionDetails(prevDetails => ({
         ...prevDetails,
         [sectionId]: {
           ...prevDetails[sectionId],
-          quantity: totalArea
+          quantity: totalAreaFt.toFixed(2)
         }
       }));
       
@@ -267,37 +266,32 @@ function EstimateGenerationClient() {
       const newMeasurements = [...(prev[sectionId] || [])];
       newMeasurements.splice(index, 1);
       
-      // Calculate the sums of all lengths and breadths
-      let totalLength = 0;
-      let totalBreadth = 0;
+      let totalAreaFt = 0;
       
+      // Calculate primary measurement area
+      const primaryLength = parseFloat(sectionDetails[sectionId]?.length) || 0;
+      const primaryBreadth = parseFloat(sectionDetails[sectionId]?.breadth) || 0;
+      if (primaryLength > 0 && primaryBreadth > 0) {
+        const primaryAreaCm = primaryLength * primaryBreadth;
+        totalAreaFt += primaryAreaCm * 0.00107639;
+      }
+      
+      // Calculate area for each additional measurement
       newMeasurements.forEach(m => {
-        if (m.length) totalLength += parseFloat(m.length) || 0;
-        if (m.breadth) totalBreadth += parseFloat(m.breadth) || 0;
+        const mLength = parseFloat(m.length) || 0;
+        const mBreadth = parseFloat(m.breadth) || 0;
+        if (mLength > 0 && mBreadth > 0) {
+          const areaCm = mLength * mBreadth;
+          totalAreaFt += areaCm * 0.00107639;
+        }
       });
-      
-      // Add the primary measurement if it exists
-      if (sectionDetails[sectionId]?.length) {
-        totalLength += parseFloat(sectionDetails[sectionId].length) || 0;
-      }
-      if (sectionDetails[sectionId]?.breadth) {
-        totalBreadth += parseFloat(sectionDetails[sectionId].breadth) || 0;
-      }
-      
-      // Calculate total area using the sums
-      let totalArea = 0;
-      if (totalLength > 0 && totalBreadth > 0) {
-        // Calculate area in cm² then convert to ft²
-        const areaCm = totalLength * totalBreadth;
-        totalArea = (areaCm * 0.00107639).toFixed(2);
-      }
       
       // Update the quantity with the total area
       setSectionDetails(prevDetails => ({
         ...prevDetails,
         [sectionId]: {
           ...prevDetails[sectionId],
-          quantity: totalArea
+          quantity: totalAreaFt.toFixed(2)
         }
       }));
       
@@ -1178,28 +1172,6 @@ function EstimateGenerationClient() {
                                             Total Area: <span style={{ fontWeight: '500', color: '#0077B6' }}>
                                               {sectionDetails[section._id]?.quantity || 0} ft²
                                             </span>
-                                            {/* Add summary of calculations */}
-                                            {(() => {
-                                              // Calculate total length and breadth
-                                              let totalLength = parseFloat(sectionDetails[section._id]?.length || 0);
-                                              let totalBreadth = parseFloat(sectionDetails[section._id]?.breadth || 0);
-                                              
-                                              // Add from multiple measurements
-                                              const measurements = multipleMeasurements[section._id] || [];
-                                              measurements.forEach(m => {
-                                                if (m.length) totalLength += parseFloat(m.length) || 0;
-                                                if (m.breadth) totalBreadth += parseFloat(m.breadth) || 0;
-                                              });
-                                              
-                                              if (totalLength > 0 && totalBreadth > 0) {
-                                                return (
-                                                  <div style={{ fontSize: '11px', color: '#777', marginTop: '2px' }}>
-                                                    (Total: {totalLength} cm × {totalBreadth} cm)
-                                                  </div>
-                                                );
-                                              }
-                                              return null;
-                                            })()}
                                           </div>
                                         </div>
                                       ) : getSectionUnitType(section) === 'running_sqft' ? (
@@ -1283,26 +1255,6 @@ function EstimateGenerationClient() {
                                             Total Length: <span style={{ fontWeight: '500', color: '#0077B6' }}>
                                               {sectionDetails[section._id]?.quantity || 0} ft
                                             </span>
-                                            {/* Add summary of calculations */}
-                                            {(() => {
-                                              // Calculate total length in cm
-                                              let totalLengthCm = 0;
-                                              
-                                              // Add from running lengths
-                                              const lengths = runningLengths[section._id] || [];
-                                              lengths.forEach(l => {
-                                                if (l.length) totalLengthCm += parseFloat(l.length) || 0;
-                                              });
-                                              
-                                              if (totalLengthCm > 0) {
-                                                return (
-                                                  <div style={{ fontSize: '11px', color: '#777', marginTop: '2px' }}>
-                                                    (Total: {totalLengthCm} cm)
-                                                  </div>
-                                                );
-                                              }
-                                              return null;
-                                            })()}
                                           </div>
                                         </div>
                                       ) : (

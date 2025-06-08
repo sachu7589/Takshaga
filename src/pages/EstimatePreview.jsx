@@ -1598,12 +1598,25 @@ function EstimatePreview() {
                         <strong>Client Name:</strong> {editedEstimate.clientName}
                       </p>
                       <p style={{color: '#64748b', marginBottom: '10px'}}>
-                        <strong>Date:</strong> {new Date(editedEstimate.createdAt).toLocaleDateString()}
+                        <strong>Date:</strong> {new Date(editedEstimate.updatedAt).toLocaleDateString()}
                       </p>
                     </div>
                     <div>
                       <p style={{color: '#64748b', marginBottom: '10px'}}>
-                        <strong>Status:</strong> <span className={`status-badge status-${editedEstimate.status || 'pending'}`}>{editedEstimate.status || 'Pending'}</span>
+                        <strong>Status:</strong> <span className={`status-badge status-${editedEstimate.status || 'pending'}`}>
+                          {(() => {
+                            switch(editedEstimate.status) {
+                              case 1:
+                                return 'Pending';
+                              case 2: 
+                                return 'Approved';
+                              case 3:
+                                return 'Rejected';
+                              default:
+                                return 'Pending';
+                            }
+                          })()}
+                        </span>
                       </p>
                       <p style={{color: '#64748b', marginBottom: '10px'}}>
                         <strong>Total Items:</strong> {editedEstimate.sections?.length || 0}
@@ -1661,7 +1674,41 @@ function EstimatePreview() {
                             marginBottom: '12px',
                             paddingLeft: '8px'
                           }}>
-                            {subcategory}
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                defaultValue={subcategory}
+                                onBlur={(e) => {
+                                  const newValue = e.target.value;
+                                  // Create a new sections array with updated subcategory
+                                  const updatedSections = editedEstimate.sections.map(section => {
+                                    if (sections.includes(section)) {
+                                      return {
+                                        ...section,
+                                        subcategory: newValue
+                                      };
+                                    }
+                                    return section;
+                                  });
+                                  
+                                  // Update the entire estimate state at once
+                                  setEditedEstimate(prev => ({
+                                    ...prev,
+                                    sections: updatedSections
+                                  }));
+                                }}
+                                style={{
+                                  padding: '5px',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '4px',
+                                  width: '200px',
+                                  color: '#1e293b',
+                                  fontSize: '16px'
+                                }}
+                              />
+                            ) : (
+                              subcategory
+                            )}
                           </h4>
                           
                           {/* Sections Table */}

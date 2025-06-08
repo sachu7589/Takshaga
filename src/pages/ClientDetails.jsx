@@ -1,9 +1,30 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import Swal from 'sweetalert2';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as QRCode from 'qrcode';
 import Sidebar from "../components/Sidebar";
 import "../assets/styles/Client.css";
+
+// Create a reusable function for adding the PAID seal
+const addPaidSeal = (doc) => {
+  // Set the color and font for the seal
+  doc.setFillColor(135, 206, 235); // Sky blue color
+  doc.setTextColor(255, 255, 255);
+  doc.setFont(undefined, 'bold');
+  doc.setFontSize(48);
+  
+  // Apply transparency
+  doc.setGState(new doc.GState({ opacity: 0.3 }));
+  
+  // Add the text with rotation
+  doc.text('PAID', 150, 150, {
+    angle: -30,
+    align: 'center'
+  });
+};
 
 function ClientDetails() {
   const { id } = useParams();
@@ -12,13 +33,120 @@ function ClientDetails() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [grandTotals, setGrandTotals] = useState([]);
+  const [estimateStatus, setEstimateStatus] = useState(1);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showStageModal, setShowStageModal] = useState(false);
+  const [stageNote, setStageNote] = useState("");
+  const [stages, setStages] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [showEditPaymentModal, setShowEditPaymentModal] = useState(false);
+  const [editPaymentData, setEditPaymentData] = useState({
+    id: '',
+    amount: ''
+  });
   const [editFormData, setEditFormData] = useState({
     clientName: "",
     email: "",
     phoneNumber: "",
     location: ""
   });
+  // New state variables for expenses
+  const [expenses, setExpenses] = useState([]);
+  const [newExpense, setNewExpense] = useState({
+    amount: '',
+    purpose: 'labour'
+  });
+  const [userNames, setUserNames] = useState({});
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const editClientButtonRef = useRef(null);
+  const addStageButtonRef = useRef(null);
+  const editPaymentButtonRef = useRef(null);
+
+  // Add styles for expense details and financial summary
+  const styles = {
+    expenseDetails: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: '8px'
+    },
+    expenseUser: {
+      fontSize: '0.9em',
+      color: '#666',
+      fontStyle: 'italic'
+    },
+    financialSummarySection: {
+      marginBottom: '2rem',
+      padding: '1.5rem',
+      backgroundColor: '#f8f9fa',
+      borderRadius: '8px',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+    },
+    summaryCards: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+      gap: '1.5rem',
+      marginTop: '1rem'
+    },
+    summaryCard: {
+      backgroundColor: 'white',
+      padding: '1.5rem',
+      borderRadius: '8px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '1rem'
+    },
+    summaryIcon: {
+      width: '40px',
+      height: '40px',
+      borderRadius: '50%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '1.2rem'
+    },
+    paymentsIcon: {
+      backgroundColor: '#e3f2fd',
+      color: '#1976d2'
+    },
+    expensesIcon: {
+      backgroundColor: '#fbe9e7',
+      color: '#d84315'
+    },
+    balanceIcon: {
+      backgroundColor: '#e8f5e9',
+      color: '#2e7d32'
+    },
+    summaryDetails: {
+      flex: 1
+    },
+    summaryTitle: {
+      fontSize: '0.9rem',
+      color: '#666',
+      marginBottom: '0.5rem'
+    },
+    summaryAmount: {
+      fontSize: '1.5rem',
+      fontWeight: 'bold',
+      color: '#333'
+    }
+  };
+
+  // Function to fetch user name
+  const fetchUserName = async (userId) => {
+    try {
+      if (!userId || userNames[userId]) return;
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/users/${userId}`);
+      if (response.data && response.data.user) {
+        setUserNames(prev => ({
+          ...prev,
+          [userId]: response.data.user.name
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching user name:', error);
+    }
+  };
 
   useEffect(() => {
     const userId = sessionStorage.getItem('userId');
@@ -27,34 +155,66 @@ function ClientDetails() {
       return;
     }
 
-    const fetchClientDetails = async () => {
+    const fetchData = async () => {
+      // Fetch user names for paid payments and expenses
+      const fetchUserNames = async (payments, expenses) => {
+        // Fetch for paid payments
+        for (const payment of payments) {
+          if (payment.status === 'paid' && payment.userId) {
+            await fetchUserName(payment.userId);
+          }
+        }
+        // Fetch for expenses
+        for (const expense of expenses) {
+          if (expense.userId) {
+            await fetchUserName(expense.userId);
+          }
+        }
+      };
       try {
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/clients/display/${id}`);
-        if (!response.data) {
+        setIsLoading(true);
+        const [clientResponse, stagesResponse, paymentsResponse, expensesResponse] = await Promise.all([
+          axios.get(`${import.meta.env.VITE_API_URL}/api/clients/display/${id}`),
+          axios.get(`${import.meta.env.VITE_API_URL}/api/stages/client/${id}`),
+          axios.get(`${import.meta.env.VITE_API_URL}/api/client-payments/client/${id}`),
+          axios.get(`${import.meta.env.VITE_API_URL}/api/client-expenses/client/${id}`)
+        ]);
+
+        if (!clientResponse.data) {
           throw new Error('Client not found');
         }
-        setClient(response.data);
+        
+        setClient(clientResponse.data);
+        setStages(stagesResponse.data);
+        setPayments(paymentsResponse.data);
+        setExpenses(expensesResponse.data);
+        await fetchUserNames(paymentsResponse.data, expensesResponse.data);
         setEditFormData({
-          clientName: response.data.clientName,
-          email: response.data.email,
-          phoneNumber: response.data.phoneNumber,
-          location: response.data.location
+          clientName: clientResponse.data.clientName,
+          email: clientResponse.data.email,
+          phoneNumber: clientResponse.data.phoneNumber,
+          location: clientResponse.data.location
         });
         
-        if (response.data.stage > 0) {
+        if (clientResponse.data.stage > 0) {
           try {
             const grandTotalResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/estimates/client/${id}/grandTotal`);
             if (grandTotalResponse.data && grandTotalResponse.data.grandTotal) {
-              // Set the grandTotal value from the response in an array for display
               setGrandTotals([grandTotalResponse.data.grandTotal]);
             }
-          } catch (grandTotalError) {
-            console.error('Error fetching grand total:', grandTotalError);
+            
+            // Fetch estimate status
+            const estimateResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/estimates/client/${id}`);
+            if (estimateResponse.data && estimateResponse.data.length > 0) {
+              setEstimateStatus(estimateResponse.data[0].status || 1);
+            }
+          } catch (error) {
+            console.error('Error fetching estimate data:', error);
           }
         }
       } catch (error) {
-        console.error('Error fetching client details:', error);
-        let errorMessage = 'Failed to fetch client details';
+        console.error('Error fetching data:', error);
+        let errorMessage = 'Failed to fetch data';
         
         if (error.response?.status === 404) {
           errorMessage = 'Client not found';
@@ -76,7 +236,7 @@ function ClientDetails() {
       }
     };
 
-    fetchClientDetails();
+    fetchData();
   }, [id, navigate]);
 
   const toggleSidebar = () => {
@@ -113,12 +273,58 @@ function ClientDetails() {
   };
 
   const handleAddStage = () => {
-    // Implement add stage functionality
-    console.log('Add stage clicked');
+    handleModalOpen(addStageButtonRef, setShowStageModal);
+  };
+
+  const handleStageSubmit = async () => {
+    try {
+      if (!stageNote.trim()) {
+        Swal.fire({
+          title: 'Error!',
+          text: 'Please enter stage notes',
+          icon: 'error',
+          confirmButtonText: 'OK'
+        });
+        return;
+      }
+
+      // Create a new stage entry
+      const stageResponse = await axios.post(`${import.meta.env.VITE_API_URL}/api/stages`, {
+        clientId: id,
+        note: stageNote
+      });
+
+      // Update client stage
+      const updatedClient = await axios.put(`${import.meta.env.VITE_API_URL}/api/clients/update/${id}`, {
+        ...client,
+        stage: client.stage + 1
+      });
+      
+      // Update local state with new stage and client data
+      setStages(prevStages => [...prevStages, stageResponse.data]);
+      setClient(updatedClient.data);
+      setShowStageModal(false);
+      setStageNote("");
+      
+      Swal.fire({
+        title: 'Success!',
+        text: 'New stage has been added',
+        icon: 'success',
+        confirmButtonText: 'OK'
+      });
+    } catch (error) {
+      console.error('Error adding stage:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: error.response?.data?.message || 'Failed to add stage',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    }
   };
 
   const handleEditClient = () => {
-    setShowEditModal(true);
+    handleModalOpen(editClientButtonRef, setShowEditModal);
   };
 
   const handleInputChange = (e) => {
@@ -194,6 +400,751 @@ function ClientDetails() {
     }
   };
 
+  const handleStatusChange = async (newStatus) => {
+    try {
+      // Get the estimate
+      const estimateResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/estimates/client/${id}`);
+      if (estimateResponse.data && estimateResponse.data.length > 0) {
+        const estimateId = estimateResponse.data[0]._id;
+        
+        // Update estimate status using the correct endpoint
+        await axios.put(`${import.meta.env.VITE_API_URL}/api/estimates/status/${estimateId}`, {
+          status: newStatus
+        });
+
+        // If estimate is approved, create a new stage and payment record
+        if (newStatus === 2) {
+          // Create stage entry
+          const newStage = await axios.post(`${import.meta.env.VITE_API_URL}/api/stages`, {
+            clientId: id,
+            note: "Estimate Approved"
+          });
+
+          // Calculate 50% of grand total and create payment record
+          if (grandTotals.length > 0) {
+            const totalAmount = parseFloat(grandTotals[0]);
+            const paymentAmount = totalAmount * 0.5;
+            
+            const newPayment = await axios.post(`${import.meta.env.VITE_API_URL}/api/client-payments`, {
+              clientId: id,
+              amount: paymentAmount
+            });
+
+            // Update payments state
+            setPayments(prevPayments => [...prevPayments, newPayment.data]);
+
+            // Update stages state
+            setStages(prevStages => [...prevStages, newStage.data]);
+          }
+        }
+        
+        // Update client stage
+        const updatedClient = await axios.put(`${import.meta.env.VITE_API_URL}/api/clients/update/${id}`, {
+          ...client,
+          stage: client.stage + 1
+        });
+        
+        setEstimateStatus(newStatus);
+        setClient(updatedClient.data);
+        
+        const statusText = newStatus === 2 ? 'approved' : 'rejected';
+        Swal.fire({
+          title: 'Success!',
+          text: `Estimate has been ${statusText} and moved to next stage`,
+          icon: 'success',
+          confirmButtonText: 'OK'
+        });
+      }
+    } catch (error) {
+      console.error('Error updating estimate status:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: error.response?.data?.message || 'Failed to update estimate status',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    }
+  };
+
+  const handleWorkStarted = async () => {
+    try {
+      // Create a new stage entry for work started
+      await axios.post(`${import.meta.env.VITE_API_URL}/api/stages`, {
+        clientId: id,
+        note: "Work Started"
+      });
+
+      // Update client stage
+      const updatedClient = await axios.put(`${import.meta.env.VITE_API_URL}/api/clients/update/${id}`, {
+        ...client,
+        stage: client.stage + 1
+      });
+      
+      setClient(updatedClient.data);
+      
+      Swal.fire({
+        title: 'Success!',
+        text: 'Work has been started and stage updated',
+        icon: 'success',
+        confirmButtonText: 'OK'
+      });
+    } catch (error) {
+      console.error('Error starting work:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: error.response?.data?.message || 'Failed to start work',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    }
+  };
+
+  const handleCompleted = async () => {
+    try {
+      // Create a new stage entry for completion
+      await axios.post(`${import.meta.env.VITE_API_URL}/api/stages`, {
+        clientId: id,
+        note: "Project Completed"
+      });
+
+      // Update client with completed status
+      const updatedClient = await axios.put(`${import.meta.env.VITE_API_URL}/api/clients/update/${id}`, {
+        ...client,
+        completed: 1
+      });
+      
+      setClient(updatedClient.data);
+      
+      Swal.fire({
+        title: 'Success!',
+        text: 'Project has been marked as completed',
+        icon: 'success',
+        confirmButtonText: 'OK'
+      });
+
+      // Redirect to clients page after completion
+      navigate('/client');
+    } catch (error) {
+      console.error('Error marking project as completed:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: error.response?.data?.message || 'Failed to mark project as completed',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    }
+  };
+
+  const formatDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'Invalid Date';
+      }
+      return date.toISOString().split('T')[0];
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
+  };
+
+  const handleMarkAsPaid = async (paymentId) => {
+    try {
+      const userId = sessionStorage.getItem('userId');
+      const response = await axios.put(`${import.meta.env.VITE_API_URL}/api/client-payments/${paymentId}`, {
+        status: 'paid',
+        userId: userId
+      });
+
+      if (response.data) {
+        // Update the payments list with the new status
+        setPayments(payments.map(payment => 
+          payment._id === paymentId ? { ...payment, status: 'paid', userId: userId } : payment
+        ));
+
+        Swal.fire({
+          title: 'Success!',
+          text: 'Payment has been marked as paid',
+          icon: 'success',
+          confirmButtonText: 'OK'
+        });
+      }
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: error.response?.data?.message || 'Failed to update payment status',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    }
+  };
+
+  const generateQRCode = async (amount) => {
+    try {
+      // Create UPI payment URL
+      const upiUrl = `upi://pay?pa=takshagaarchitects@hdfcbank&pn=TakshagaArchitects&am=${amount}&cu=INR`;
+      // Generate QR code as data URL
+      return await QRCode.toDataURL(upiUrl);
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+      return null;
+    }
+  };
+
+  const handleDownloadInvoice = async (payment) => {
+    try {
+      // Get the payment index to determine the phase
+      const paymentIndex = payments.findIndex(p => p._id === payment._id);
+      if (paymentIndex === -1) {
+        throw new Error('Payment not found');
+      }
+
+      // Generate QR code first
+      const qrCodeDataUrl = await generateQRCode(parseFloat(payment.amount));
+      
+      const doc = new jsPDF();
+      
+      // Add full page border - only 4 sides
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.5);
+      doc.rect(5, 5, 200, 287);
+      
+      // Add professional header background with gradient effect
+      doc.setFillColor(0, 51, 102); // Dark blue
+      doc.rect(5, 5, 200, 35, 'F');
+      doc.setFillColor(0, 71, 142); // Lighter blue for accent
+      doc.rect(5, 35, 200, 12, 'F');
+      
+      // Add logo on right side with reduced size
+      const logoUrl = '/takshaga.png';
+      doc.addImage(logoUrl, 'PNG', 165, 8, 30, 20);
+      
+      // Add company details on left side with professional styling
+      doc.setFontSize(22);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont(undefined, 'bold');
+      doc.text("TAKSHAGA", 15, 18);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text("Where Art Meets Architecture", 15, 25);
+      doc.text("Upputhara po, Idukki, Kerala - 685505", 15, 31);
+
+      // Add contact details horizontally in light blue area
+      doc.setFontSize(10);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont(undefined, 'normal');
+      doc.text("+91 9846660624  |  +91 9544344332  |  www.takshaga.com", 105, 43, { align: 'center' });
+      
+      // Add professional invoice details section with gray background
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(5, 57, 200, 45, 2, 2, 'F');
+      
+      // Add invoice details on left in a structured format
+      doc.setTextColor(0);
+      doc.setFontSize(11);
+      doc.setFont(undefined, 'bold');
+      doc.text("INVOICE DETAILS", 15, 67);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Date: ${formatDate(payment.date)}`, 15, 77);
+      
+      // Add client details on right with better structure
+      doc.setFontSize(11);
+      doc.setFont(undefined, 'bold');
+      doc.text("BILL TO", 110, 67);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text(client.clientName, 110, 77);
+      doc.text(client.location || "", 110, 87);
+      
+      // Add INVOICE heading with professional styling
+      doc.setFillColor(0, 51, 102);
+      doc.rect(5, 112, 200, 12, 'F');
+      doc.setFontSize(14);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont(undefined, 'bold');
+      doc.text("INVOICE", 105, 120, { align: "center" });
+
+      // Add payment details table
+      autoTable(doc, {
+        startY: 132,
+        head: [['Description', 'Amount']],
+        body: [
+          [`Phase ${paymentIndex + 1} Payment`, `Rs. ${parseFloat(payment.amount).toLocaleString()}`],
+          ['Total Amount', `Rs. ${parseFloat(payment.amount).toLocaleString()}`]
+        ],
+        theme: 'grid',
+        headStyles: {
+          fillColor: [0, 51, 102],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold'
+        },
+        bodyStyles: {
+          fillColor: [255, 255, 255],
+          textColor: [0, 0, 0]
+        },
+        styles: { fontSize: 10, cellPadding: 5 },
+        margin: { left: 15, right: 15 }
+      });
+
+      let yPos = doc.lastAutoTable.finalY + 20;
+
+      // Add bank details section with professional styling
+      doc.setFillColor(0, 51, 102);
+      doc.rect(5, yPos, 200, 12, 'F');
+      doc.setFontSize(14);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont(undefined, 'bold');
+      doc.text("PAYMENT DETAILS", 105, yPos + 8, { align: "center" });
+
+      yPos += 25;
+      
+      // Add bank details and QR code in two columns
+      doc.setTextColor(0);
+      doc.setFontSize(11);
+      doc.setFont(undefined, 'bold');
+      doc.text("Bank Details", 15, yPos);
+      doc.text("UPI Payment", 110, yPos);
+
+      yPos += 10;
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text([
+        "Bank: HDFC Bank",
+        "Account Name: Takshaga Architects",
+        "Account Number: 5678 9012 3456",
+        "IFSC Code: HDFC0004567",
+        "Account Type: Current Account",
+        "UPI ID: takshagaarchitects@hdfcbank"
+      ], 15, yPos);
+
+      // Add QR code if generated successfully
+      if (qrCodeDataUrl) {
+        doc.addImage(qrCodeDataUrl, 'PNG', 110, yPos - 5, 50, 50);
+        doc.setFontSize(9);
+        doc.text("Scan to pay via UPI", 110, yPos + 55);
+      }
+
+      yPos += 80;
+
+      // Add notes section
+      doc.setFillColor(0, 51, 102);
+      doc.rect(5, yPos, 200, 12, 'F');
+      doc.setFontSize(14);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont(undefined, 'bold');
+      doc.text("NOTES", 105, yPos + 8, { align: "center" });
+
+      yPos += 25;
+      doc.setTextColor(0);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text([
+        "• This is a computer-generated invoice.",
+        "• Please make the payment within 7 days of invoice generation.",
+        "• For any queries, please contact our support team.",
+        "• Thank you for your business!"
+      ], 15, yPos);
+
+      // Add page number
+      doc.setFontSize(8);
+      doc.text('Page 1 of 1', 105, 290, { align: 'center' });
+
+      // Save the PDF with client name and phase
+      const fileName = `Invoice-${client.clientName.trim().replace(/\s+/g, '_')}-Phase${paymentIndex + 1}.pdf`;
+      doc.save(fileName);
+
+    } catch (error) {
+      console.error('Error generating invoice:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: 'Failed to generate invoice',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    }
+  };
+
+  const handleDownloadReceipt = async (payment) => {
+    try {
+      // Get the payment index to determine the phase
+      const paymentIndex = payments.findIndex(p => p._id === payment._id);
+      if (paymentIndex === -1) {
+        throw new Error('Payment not found');
+      }
+
+      const doc = new jsPDF();
+      
+      // Add full page border - only 4 sides
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.5);
+      doc.rect(5, 5, 200, 287);
+      
+      // Add professional header background with gradient effect
+      doc.setFillColor(0, 51, 102); // Dark blue
+      doc.rect(5, 5, 200, 35, 'F');
+      doc.setFillColor(0, 71, 142); // Lighter blue for accent
+      doc.rect(5, 35, 200, 12, 'F');
+      
+      // Add logo on right side with reduced size
+      const logoUrl = '/takshaga.png';
+      doc.addImage(logoUrl, 'PNG', 165, 8, 30, 20);
+      
+      // Add company details on left side with professional styling
+      doc.setFontSize(22);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont(undefined, 'bold');
+      doc.text("TAKSHAGA", 15, 18);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text("Where Art Meets Architecture", 15, 25);
+      doc.text("Upputhara po, Idukki, Kerala - 685505", 15, 31);
+
+      // Add contact details horizontally in light blue area
+      doc.setFontSize(10);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont(undefined, 'normal');
+      doc.text("+91 9846660624  |  +91 9544344332  |  www.takshaga.com", 105, 43, { align: 'center' });
+      
+      // Add professional receipt details section with gray background
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(5, 57, 200, 45, 2, 2, 'F');
+      
+      // Add receipt details on left in a structured format
+      doc.setTextColor(0);
+      doc.setFontSize(11);
+      doc.setFont(undefined, 'bold');
+      doc.text("RECEIPT DETAILS", 15, 67);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Date: ${formatDate(payment.date)}`, 15, 77);
+      
+      // Add client details on right with better structure
+      doc.setFontSize(11);
+      doc.setFont(undefined, 'bold');
+      doc.text("BILL TO", 110, 67);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text(client.clientName, 110, 77);
+      doc.text(client.location || "", 110, 87);
+      
+      // Add RECEIPT heading with professional styling
+      doc.setFillColor(0, 51, 102);
+      doc.rect(5, 112, 200, 12, 'F');
+      doc.setFontSize(14);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont(undefined, 'bold');
+      doc.text("PAYMENT RECEIPT", 105, 120, { align: "center" });
+
+      // Calculate total paid amount and balance
+      const grandTotal = grandTotals[0] || 0;
+      const totalPaid = payments
+        .filter(p => p.status === 'paid')
+        .reduce((sum, p) => sum + parseFloat(p.amount), 0);
+      const balance = grandTotal - totalPaid;
+
+      // Add payment details table
+      autoTable(doc, {
+        startY: 132,
+        head: [['Description', 'Amount']],
+        body: [
+          [`Phase ${paymentIndex + 1} Payment`, `Rs. ${parseFloat(payment.amount).toLocaleString()}`],
+          ['Total Project Amount', `Rs. ${parseFloat(grandTotal).toLocaleString()}`],
+          ['Total Amount Paid', `Rs. ${parseFloat(totalPaid).toLocaleString()}`],
+          ['Balance Amount', `Rs. ${parseFloat(balance).toLocaleString()}`]
+        ],
+        theme: 'grid',
+        headStyles: {
+          fillColor: [0, 51, 102],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold'
+        },
+        bodyStyles: {
+          fillColor: [255, 255, 255],
+          textColor: [0, 0, 0]
+        },
+        styles: { fontSize: 10, cellPadding: 5 },
+        margin: { left: 15, right: 15 }
+      });
+
+      let yPos = doc.lastAutoTable.finalY + 20;
+
+      // Add PAID seal
+      addPaidSeal(doc);
+
+      // Add notes section
+      doc.setFillColor(0, 51, 102);
+      doc.rect(5, yPos, 200, 12, 'F');
+      doc.setFontSize(14);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont(undefined, 'bold');
+      doc.text("NOTES", 105, yPos + 8, { align: "center" });
+
+      yPos += 25;
+      doc.setTextColor(0);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text([
+        "• This is a computer-generated receipt.",
+        "• This receipt confirms the payment received for the specified phase.",
+        "• For any queries, please contact our support team.",
+        "• Thank you for your business!"
+      ], 15, yPos);
+
+      // Add page number
+      doc.setFontSize(8);
+      doc.text('Page 1 of 1', 105, 290, { align: 'center' });
+
+      // Save the PDF with client name and phase
+      const fileName = `Receipt-${client.clientName.trim().replace(/\s+/g, '_')}-Phase${paymentIndex + 1}.pdf`;
+      doc.save(fileName);
+
+    } catch (error) {
+      console.error('Error generating receipt:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: error.message || 'Failed to generate receipt',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    }
+  };
+
+  const handleEditPayment = (payment) => {
+    setEditPaymentData({
+      id: payment._id,
+      amount: payment.amount
+    });
+    handleModalOpen(editPaymentButtonRef, setShowEditPaymentModal);
+  };
+
+  const handleUpdatePayment = async () => {
+    try {
+      const response = await axios.put(
+        `${import.meta.env.VITE_API_URL}/api/client-payments/${editPaymentData.id}`,
+        { amount: parseFloat(editPaymentData.amount) }
+      );
+
+      if (response.data) {
+        // Update the payments list with the new amount
+        setPayments(payments.map(payment => 
+          payment._id === editPaymentData.id 
+            ? { ...payment, amount: parseFloat(editPaymentData.amount) }
+            : payment
+        ));
+
+        setShowEditPaymentModal(false);
+        Swal.fire({
+          title: 'Success!',
+          text: 'Payment amount updated successfully',
+          icon: 'success',
+          confirmButtonText: 'OK'
+        });
+      }
+    } catch (error) {
+      console.error('Error updating payment amount:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: error.response?.data?.message || 'Failed to update payment amount',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    }
+  };
+
+  const handleDownloadPaymentReport = async () => {
+    try {
+      const doc = new jsPDF();
+      
+      // Add full page border
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.5);
+      doc.rect(5, 5, 200, 287);
+      
+      // Add header with gradient effect
+      doc.setFillColor(0, 51, 102);
+      doc.rect(5, 5, 200, 35, 'F');
+      doc.setFillColor(0, 71, 142);
+      doc.rect(5, 35, 200, 12, 'F');
+      
+      // Add logo
+      const logoUrl = '/takshaga.png';
+      doc.addImage(logoUrl, 'PNG', 165, 8, 30, 20);
+      
+      // Add company details
+      doc.setFontSize(22);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont(undefined, 'bold');
+      doc.text("TAKSHAGA", 15, 18);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text("Where Art Meets Architecture", 15, 25);
+      doc.text("Upputhara po, Idukki, Kerala - 685505", 15, 31);
+
+      // Add contact details
+      doc.setFontSize(10);
+      doc.setTextColor(255, 255, 255);
+      doc.text("+91 9846660624  |  +91 9544344332  |  www.takshaga.com", 105, 43, { align: 'center' });
+      
+      // Add report title
+      doc.setFillColor(0, 51, 102);
+      doc.rect(5, 57, 200, 12, 'F');
+      doc.setFontSize(14);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont(undefined, 'bold');
+      doc.text("PAYMENT REPORT", 105, 65, { align: "center" });
+
+      // Add client details section
+      doc.setTextColor(0);
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      doc.text("Client Details", 15, 85);
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(10);
+      doc.text([
+        `Client Name: ${client.clientName}`,
+        `Email: ${client.email}`,
+        `Phone: ${client.phoneNumber}`,
+        `Location: ${client.location || 'N/A'}`,
+        `Project Total: ${parseFloat(grandTotals[0]).toLocaleString()}`
+      ], 15, 95);
+
+      // Add payment details table
+      const sortedPayments = [...payments].sort((a, b) => new Date(a.date) - new Date(b.date));
+      const tableHeaders = [['Phase', 'Date', 'Amount']];
+      const tableData = sortedPayments.map((payment, index) => [
+        `Phase ${index + 1}`,
+        formatDate(payment.date),
+        `${parseFloat(payment.amount).toLocaleString()}`
+      ]);
+
+      // Calculate total paid amount
+      const totalPaid = payments
+        .filter(p => p.status === 'paid')
+        .reduce((sum, p) => sum + parseFloat(p.amount), 0);
+      const balance = parseFloat(grandTotals[0]) - totalPaid;
+
+      // Add summary rows with column span
+      tableData.push(
+        [{ content: 'Total Paid', colSpan: 2 }, `${totalPaid.toLocaleString()}`],
+        [{ content: 'Balance', colSpan: 2 }, `${balance.toLocaleString()}`]
+      );
+
+      autoTable(doc, {
+        startY: 120,
+        head: tableHeaders,
+        body: tableData,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [0, 51, 102],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold'
+        },
+        styles: {
+          fontSize: 10,
+          cellPadding: 5
+        },
+        columnStyles: {
+          0: { cellWidth: 50 },
+          1: { cellWidth: 50 },
+          2: { cellWidth: 80 }
+        }
+      });
+
+      // Add payment summary
+      const summaryY = doc.lastAutoTable.finalY + 20;
+      doc.setFillColor(0, 51, 102);
+      doc.rect(5, summaryY, 200, 12, 'F');
+      doc.setFontSize(14);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont(undefined, 'bold');
+      doc.text("PAYMENT SUMMARY", 105, summaryY + 8, { align: "center" });
+
+      doc.setTextColor(0);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      const percentagePaid = ((totalPaid / parseFloat(grandTotals[0])) * 100).toFixed(0);
+      doc.text([
+        `Total Project Amount: ${parseFloat(grandTotals[0]).toLocaleString()}`,
+        `Total Amount Paid: ${totalPaid.toLocaleString()} (${percentagePaid}%)`,
+        `Remaining Balance: ${balance.toLocaleString()}`,
+        `Payment Status: ${balance === 0 ? 'FULLY PAID' : 'PARTIALLY PAID'}`
+      ], 15, summaryY + 25);
+
+      // Add footer
+      doc.setFontSize(8);
+      doc.text('This is a computer-generated report.', 105, 280, { align: 'center' });
+      doc.text('Page 1 of 1', 105, 285, { align: 'center' });
+
+      // Save the PDF
+      const fileName = `Payment_Report_${client.clientName.trim().replace(/\s+/g, '_')}.pdf`;
+      doc.save(fileName);
+
+    } catch (error) {
+      console.error('Error generating payment report:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: 'Failed to generate payment report',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    }
+  };
+
+  const handleAddExpense = async () => {
+    try {
+      if (!newExpense.amount || parseFloat(newExpense.amount) <= 0) {
+        Swal.fire({
+          title: 'Error!',
+          text: 'Please enter a valid amount',
+          icon: 'error',
+          confirmButtonText: 'OK'
+        });
+        return;
+      }
+
+      const userId = sessionStorage.getItem('userId');
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/client-expenses`, {
+        clientId: id,
+        userId: userId,
+        amount: parseFloat(newExpense.amount),
+        purpose: newExpense.purpose
+      });
+
+      if (response.data) {
+        setExpenses([...expenses, response.data]);
+        setShowExpenseForm(false);
+        setNewExpense({
+          amount: '',
+          purpose: 'labour'
+        });
+        
+        Swal.fire({
+          title: 'Success!',
+          text: 'Expense added successfully',
+          icon: 'success',
+          confirmButtonText: 'OK'
+        });
+      }
+    } catch (error) {
+      console.error('Error adding expense:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: error.response?.data?.message || 'Failed to add expense',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    }
+  };
+
+  // Function to handle modal positioning
+  const handleModalOpen = (buttonRef, setModalState) => {
+    if (buttonRef.current) {
+      setModalState(true);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="loading-container">
@@ -203,7 +1154,14 @@ function ClientDetails() {
   }
 
   if (!client) {
-    return null;
+    return (
+      <div className="error-container">
+        <h2>Error loading client details</h2>
+        <button onClick={() => navigate('/client')} className="back-button">
+          Back to Clients
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -214,31 +1172,827 @@ function ClientDetails() {
       <Sidebar isOpen={isSidebarOpen} />
       <div className={`dashboard-content ${isSidebarOpen ? "sidebar-open" : ""}`}>
         <div className="client-details-container">
-          {/* Client Details Header with Action Buttons */}
-          <div className="client-header">
-            <h2>Client Information</h2>
-            <div className="client-actions">
-              {client.stage === 0 && (
-                <button 
-                  className="edit-btn"
-                  onClick={handleEditClient}
-                >
-                  Edit
-                </button>
-              )}
-              <button 
-                className="delete-btn"
-                onClick={handleDeleteClient}
-              >
-                Delete
-              </button>
+          <div className="client-details-layout">
+            {/* Left Section - Client Information */}
+            <div className="client-info-section">
+              {/* Professional Client Information Header */}
+              <div className="client-info-header">
+                <div className="client-info-main">
+                  <div className="client-name-section">
+                    <h2>{client.clientName}</h2>
+                    <div className="client-badges">
+                      <span className="client-status">{client.completed ? 'Completed' : 'Active'}</span>
+                    </div>
+                  </div>
+                  <div className="client-quick-info">
+                    <div className="info-item">
+                      <i className="fas fa-envelope"></i>
+                      <span>{client.email}</span>
+                    </div>
+                    <div className="info-item">
+                      <i className="fas fa-phone"></i>
+                      <span>{client.phoneNumber}</span>
+                    </div>
+                    <div className="info-item">
+                      <i className="fas fa-map-marker-alt"></i>
+                      <span>{client.location || 'No location specified'}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="client-actions">
+                  {client.stage === 0 && (
+                    <button 
+                      ref={editClientButtonRef}
+                      className="action-btn edit-btn"
+                      onClick={handleEditClient}
+                    >
+                      <i className="fas fa-edit"></i>
+                      Edit Details
+                    </button>
+                  )}
+                  <button 
+                    className="action-btn delete-btn"
+                    onClick={handleDeleteClient}
+                  >
+                    <i className="fas fa-trash-alt"></i>
+                    Delete Client
+                  </button>
+                </div>
+              </div>
+
+              {/* Project Progress Section */}
+              <div className="project-progress-section">
+                <div className="progress-header">
+                  <div className="progress-title">
+                    {client.stage > 0 && (
+                      <div className="stage-indicator">
+                        <span className="current-stage-badge">Stage {client.stage}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="estimate-actions">
+                    {client.stage === 0 ? (
+                      <button 
+                        className="prepare-estimate-btn"
+                        onClick={handlePrepareEstimate}
+                      >
+                        <i className="fas fa-file-invoice"></i>
+                        Prepare Estimate
+                      </button>
+                    ) : (
+                      <div className="estimate-controls">
+                        <button 
+                          className="view-estimate-btn"
+                          onClick={() => handleViewEstimate(id)}
+                        >
+                          <i className="fas fa-eye"></i>
+                          View Estimate
+                        </button>
+                        {grandTotals.length > 0 && (
+                          <div className="estimate-amount">
+                            <span className="amount-label">Project Value:</span>
+                            <span className="amount-value">
+                              ₹{parseFloat(grandTotals[0]).toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="stages-container">
+                  {/* Current Stage Status */}
+                  {client.stage > 0 && (
+                    <div className="current-stage-status">
+                      {estimateStatus === 3 ? (
+                        <div className="status-card rejected">
+                          <i className="fas fa-times-circle"></i>
+                          <span>Estimate Rejected</span>
+                        </div>
+                      ) : (
+                        <div className="status-card">
+                          {client.stage === 1 && (
+                            <>
+                              {estimateStatus === 1 && (
+                                <div className="estimate-approval">
+                                  <span className="status-badge status-pending">
+                                    <i className="fas fa-clock"></i>
+                                    Pending Approval
+                                  </span>
+                                  <div className="approval-actions">
+                                    <button 
+                                      className="approve-btn"
+                                      onClick={() => handleStatusChange(2)}
+                                    >
+                                      <i className="fas fa-check"></i>
+                                      Approve
+                                    </button>
+                                    <button 
+                                      className="reject-btn"
+                                      onClick={() => handleStatusChange(3)}
+                                    >
+                                      <i className="fas fa-times"></i>
+                                      Reject
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              {estimateStatus === 2 && (
+                                <div className="status-approved">
+                                  <i className="fas fa-check-circle"></i>
+                                  <span>Estimate Approved</span>
+                                </div>
+                              )}
+                            </>
+                          )}
+                          {client.stage === 2 && estimateStatus === 2 && (
+                            <div className="work-start-section">
+                              <span className="status-badge status-approved">
+                                <i className="fas fa-check"></i>
+                                Estimate Approved
+                              </span>
+                              <button 
+                                className="start-work-btn"
+                                onClick={handleWorkStarted}
+                              >
+                                <i className="fas fa-play"></i>
+                                Start Work
+                              </button>
+                            </div>
+                          )}
+                          {client.stage > 2 && !client.completed && (
+                            <div className="stage-actions">
+                              <button 
+                                ref={addStageButtonRef}
+                                className="add-stage-btn"
+                                onClick={handleAddStage}
+                              >
+                                <i className="fas fa-plus"></i>
+                                Add New Stage
+                              </button>
+                              {client.stage >= 4 && (
+                                <button 
+                                  className="complete-btn"
+                                  onClick={handleCompleted}
+                                >
+                                  <i className="fas fa-flag-checkered"></i>
+                                  Mark Project Complete
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Stage History Timeline */}
+                  {stages.length > 0 && (
+                    <div className="stages-history">
+                      <h4>Project Timeline</h4>
+                      <div className="timeline-container">
+                        {stages
+                          .filter(stage => stage && stage.date)
+                          .sort((a, b) => {
+                            const dateA = new Date(a.date);
+                            const dateB = new Date(b.date);
+                            return isNaN(dateA.getTime()) || isNaN(dateB.getTime()) 
+                              ? 0 
+                              : dateA.getTime() - dateB.getTime();
+                          })
+                          .map((stage, index) => (
+                            <div key={stage._id} className="timeline-item">
+                              <div className="timeline-marker">
+                                <div className="marker-dot"></div>
+                                <div className="marker-line"></div>
+                              </div>
+                              <div className="timeline-content">
+                                <div className="timeline-header">
+                                  <span className="timeline-date">
+                                    <i className="fas fa-calendar-alt"></i>
+                                    {formatDate(stage.date)}
+                                  </span>
+                                  <span className="timeline-stage">Stage {index + 1}</span>
+                                </div>
+                                <div className="timeline-note">{stage.note}</div>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
+
+                          {/* Financial Summary Section */}
+              {estimateStatus === 2 && (
+                <div className="financial-overview">
+                  {/* Summary Cards */}
+                  <div className="summary-section">
+                    <h3>Financial Summary</h3>
+                    <div className="summary-cards">
+                      {/* Total Payments Received */}
+                      <div className="summary-card payments">
+                        <div className="card-icon">
+                          <i className="fas fa-money-bill-wave"></i>
+                        </div>
+                        <div className="card-details">
+                          <h4>Total Payments Received</h4>
+                          <span className="amount">
+                            ₹{payments
+                              .filter(p => p.status === 'paid')
+                              .reduce((sum, p) => sum + parseFloat(p.amount), 0)
+                              .toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Total Expenses */}
+                      <div className="summary-card expenses">
+                        <div className="card-icon">
+                          <i className="fas fa-file-invoice-dollar"></i>
+                        </div>
+                        <div className="card-details">
+                          <h4>Total Expenses</h4>
+                          <span className="amount">
+                            ₹{expenses
+                              .reduce((sum, e) => sum + parseFloat(e.amount), 0)
+                              .toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Net Balance */}
+                      <div className="summary-card balance">
+                        <div className="card-icon">
+                          <i className="fas fa-wallet"></i>
+                        </div>
+                        <div className="card-details">
+                          <h4>Net Balance</h4>
+                          <span className="amount">
+                            ₹{(
+                              payments
+                                .filter(p => p.status === 'paid')
+                                .reduce((sum, p) => sum + parseFloat(p.amount), 0) -
+                              expenses
+                                .reduce((sum, e) => sum + parseFloat(e.amount), 0)
+                            ).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expense Breakdown Section */}
+                  <div className="expense-breakdown-section" style={{
+                    marginBottom: '2rem',
+                    padding: '1.5rem',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '8px'
+                  }}>
+                    <h3>Expense Breakdown</h3>
+                    <div className="expense-categories" style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                      gap: '1.5rem',
+                      marginTop: '1rem'
+                    }}>
+                      {/* Materials Expenses */}
+                      <div className="expense-category materials" style={{
+                        backgroundColor: 'white',
+                        padding: '1.5rem',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '1rem'
+                      }}>
+                        <div className="category-icon" style={{
+                          backgroundColor: '#e3f2fd',
+                          color: '#1976d2',
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <i className="fas fa-tools"></i>
+                        </div>
+                        <div className="category-info" style={{
+                          flex: 1
+                        }}>
+                          <h4 style={{ margin: '0', color: '#666', fontSize: '0.9rem' }}>Materials</h4>
+                          <span className="amount" style={{
+                            fontSize: '1.5rem',
+                            fontWeight: 'bold',
+                            color: '#333',
+                            display: 'block',
+                            marginTop: '0.25rem'
+                          }}>
+                            ₹{expenses
+                              .filter(e => e.purpose === 'material')
+                              .reduce((sum, e) => sum + parseFloat(e.amount), 0)
+                              .toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Labour Expenses */}
+                      <div className="expense-category labour" style={{
+                        backgroundColor: 'white',
+                        padding: '1.5rem',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '1rem'
+                      }}>
+                        <div className="category-icon" style={{
+                          backgroundColor: '#fff3e0',
+                          color: '#f57c00',
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <i className="fas fa-hard-hat"></i>
+                        </div>
+                        <div className="category-info" style={{
+                          flex: 1
+                        }}>
+                          <h4 style={{ margin: '0', color: '#666', fontSize: '0.9rem' }}>Labour</h4>
+                          <span className="amount" style={{
+                            fontSize: '1.5rem',
+                            fontWeight: 'bold',
+                            color: '#333',
+                            display: 'block',
+                            marginTop: '0.25rem'
+                          }}>
+                            ₹{expenses
+                              .filter(e => e.purpose === 'labour')
+                              .reduce((sum, e) => sum + parseFloat(e.amount), 0)
+                              .toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Other Expenses */}
+                      <div className="expense-category other" style={{
+                        backgroundColor: 'white',
+                        padding: '1.5rem',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '1rem'
+                      }}>
+                        <div className="category-icon" style={{
+                          backgroundColor: '#f3e5f5',
+                          color: '#7b1fa2',
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <i className="fas fa-receipt"></i>
+                        </div>
+                        <div className="category-info" style={{
+                          flex: 1
+                        }}>
+                          <h4 style={{ margin: '0', color: '#666', fontSize: '0.9rem' }}>Other</h4>
+                          <span className="amount" style={{
+                            fontSize: '1.5rem',
+                            fontWeight: 'bold',
+                            color: '#333',
+                            display: 'block',
+                            marginTop: '0.25rem'
+                          }}>
+                            ₹{expenses
+                              .filter(e => e.purpose === 'other')
+                              .reduce((sum, e) => sum + parseFloat(e.amount), 0)
+                              .toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            {/* Right Section - Payment History */}
+            {payments.length > 0 && (
+              <div className="payment-history-section">
+                <h3>Payment History</h3>
+                <div className="payments-list">
+                  {/* Show Balance Card First */}
+                  {grandTotals.length > 0 && (
+                    <div className="balance-card">
+                      <div className="balance-header">
+                        <h4>Project Payment Summary</h4>
+                      </div>
+                      <div className="balance-details">
+                        <div className="balance-row">
+                          <span>Total Project Amount:</span>
+                          <span>₹{parseFloat(grandTotals[0]).toLocaleString()}</span>
+                        </div>
+                        <div className="balance-row">
+                          <span>Total Received:</span>
+                          <div className="amount-with-percentage">
+                            <span>₹{payments
+                              .filter(p => p.status === 'paid')
+                              .reduce((sum, p) => sum + parseFloat(p.amount), 0)
+                              .toLocaleString()}</span>
+                            <span className="percentage">
+                              ({((payments
+                                .filter(p => p.status === 'paid')
+                                .reduce((sum, p) => sum + parseFloat(p.amount), 0) / parseFloat(grandTotals[0])) * 100).toFixed(0)}%)
+                            </span>
+                          </div>
+                        </div>
+                        <div className="balance-row total">
+                          <span>Remaining Balance:</span>
+                          <div className="amount-with-percentage">
+                            <span>₹{(parseFloat(grandTotals[0]) - 
+                              payments
+                                .filter(p => p.status === 'paid')
+                                .reduce((sum, p) => sum + parseFloat(p.amount), 0)
+                            ).toLocaleString()}</span>
+                            <span className="percentage">
+                              ({((parseFloat(grandTotals[0]) - 
+                                payments
+                                  .filter(p => p.status === 'paid')
+                                  .reduce((sum, p) => sum + parseFloat(p.amount), 0)) / parseFloat(grandTotals[0]) * 100).toFixed(0)}%)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Add New Payment Section - Only show if there's remaining balance */}
+                  {(parseFloat(grandTotals[0]) - 
+                    payments
+                      .filter(p => p.status === 'paid')
+                      .reduce((sum, p) => sum + parseFloat(p.amount), 0)) > 0 && 
+                    !payments.some(p => p.status !== 'paid') && (
+                    <div className="new-payment-section">
+                      <h4>Create New Payment Phase</h4>
+                      <div className="payment-form">
+                        <div className="form-group">
+                          <label>Amount (Max: ₹{(parseFloat(grandTotals[0]) - 
+                            payments
+                              .filter(p => p.status === 'paid')
+                              .reduce((sum, p) => sum + parseFloat(p.amount), 0)
+                          ).toLocaleString()})</label>
+                          <input
+                            type="number"
+                            value={editPaymentData.amount}
+                            onChange={(e) => {
+                              const value = parseFloat(e.target.value);
+                              const maxAmount = parseFloat(grandTotals[0]) - 
+                                payments
+                                  .filter(p => p.status === 'paid')
+                                  .reduce((sum, p) => sum + parseFloat(p.amount), 0);
+                              if (value <= maxAmount) {
+                                setEditPaymentData({
+                                  ...editPaymentData,
+                                  amount: e.target.value
+                                });
+                              }
+                            }}
+                            min="0"
+                            max={parseFloat(grandTotals[0]) - 
+                              payments
+                                .filter(p => p.status === 'paid')
+                                .reduce((sum, p) => sum + parseFloat(p.amount), 0)}
+                            step="0.01"
+                          />
+                        </div>
+                        <button 
+                          className="create-payment-btn"
+                          onClick={async () => {
+                            try {
+                              const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/client-payments`, {
+                                clientId: id,
+                                amount: parseFloat(editPaymentData.amount),
+                                date: new Date()
+                              });
+
+                              if (response.data) {
+                                setPayments([...payments, response.data]);
+                                setEditPaymentData({ id: '', amount: '' });
+                                Swal.fire({
+                                  title: 'Success!',
+                                  text: 'New payment phase created successfully',
+                                  icon: 'success',
+                                  confirmButtonText: 'OK'
+                                });
+                              }
+                            } catch (error) {
+                              console.error('Error creating payment:', error);
+                              Swal.fire({
+                                title: 'Error!',
+                                text: error.response?.data?.message || 'Failed to create payment',
+                                icon: 'error',
+                                confirmButtonText: 'OK'
+                              });
+                            }
+                          }}
+                          disabled={!editPaymentData.amount || parseFloat(editPaymentData.amount) <= 0}
+                        >
+                          Create Payment Phase
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show Paid Payments */}
+                  {payments
+                    .filter(payment => payment.status === 'paid')
+                    .sort((a, b) => new Date(a.date) - new Date(b.date))
+                    .map((payment, index) => {
+                      const percentage = ((parseFloat(payment.amount) / parseFloat(grandTotals[0])) * 100).toFixed(0);
+                      return (
+                        <div key={payment._id} className="payment-card paid">
+                          <div className="payment-header">
+                            <span className="payment-status status-paid">Paid</span>
+                            <span className="payment-phase">
+                              Phase {index + 1} ({percentage}%)
+                            </span>
+                          </div>
+                          <div className="payment-body">
+                            <div className="payment-info">
+                              <div className="info-row">
+                                <span>Amount Received:</span>
+                                <span className="amount-value">₹{parseFloat(payment.amount).toLocaleString()}</span>
+                              </div>
+                              <div className="info-row">
+                                <span>Date:</span>
+                                <span>{formatDate(payment.date)}</span>
+                              </div>
+                              {payment.userId && userNames[payment.userId] && (
+                                <div className="info-row">
+                                  <span>Marked as Paid by:</span>
+                                  <span>{userNames[payment.userId]}</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="payment-actions">
+                              <button 
+                                className="download-receipt-btn"
+                                onClick={() => handleDownloadReceipt(payment)}
+                              >
+                                <i className="fas fa-file-alt"></i> Download Receipt
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                  {/* Show Pending Payments */}
+                  {payments
+                    .filter(payment => payment.status !== 'paid')
+                    .sort((a, b) => new Date(a.date) - new Date(b.date))
+                    .map((payment, index) => {
+                      const percentage = ((parseFloat(payment.amount) / parseFloat(grandTotals[0])) * 100).toFixed(0);
+                      return (
+                        <div key={payment._id} className="payment-card pending">
+                          <div className="payment-header">
+                            <span className="payment-status status-pending">Pending</span>
+                            <span className="payment-phase">
+                              Phase {payments.filter(p => p.status === 'paid').length + index + 1} ({percentage}%)
+                            </span>
+                          </div>
+                          <div className="payment-body">
+                            <div className="payment-info">
+                              <div className="info-row">
+                                <span>Amount Due:</span>
+                                <div className="amount-with-percentage">
+                                  <span className="amount-value">
+                                    ₹{parseFloat(payment.amount).toLocaleString()}
+                                  </span>
+                                  <button 
+                                    ref={editPaymentButtonRef}
+                                    className="edit-amount-btn"
+                                    onClick={() => handleEditPayment(payment)}
+                                    title="Edit Amount"
+                                  >
+                                    Edit
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="info-row">
+                                <span>Due Date:</span>
+                                <span>{formatDate(payment.date)}</span>
+                              </div>
+                            </div>
+                            <div className="payment-actions">
+                              <button 
+                                className="download-invoice-btn"
+                                onClick={() => handleDownloadInvoice(payment)}
+                              >
+                                <i className="fas fa-file-invoice"></i> Download Invoice
+                              </button>
+                              <button 
+                                className="mark-paid-btn"
+                                onClick={() => handleMarkAsPaid(payment._id)}
+                              >
+                                Mark as Paid
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                  {/* Download Report Button */}
+                  {payments.length > 0 && payments.every(p => p.status === 'paid') && (
+                    <div className="report-button-container">
+                      <button 
+                        className="download-report-btn"
+                        onClick={handleDownloadPaymentReport}
+                      >
+                        <i className="fas fa-file-pdf"></i> Download Payment Report
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Expenses Section - Only show when estimate is approved */}
+            {estimateStatus === 2 && (
+              <div className="expenses-section">
+                <div className="expenses-header">
+                  <h3>Expenses</h3>
+                  <button 
+                    className="add-expense-btn"
+                    onClick={() => setShowExpenseForm(!showExpenseForm)}
+                  >
+                    {showExpenseForm ? 'Cancel' : 'Add Expense'}
+                  </button>
+                </div>
+
+                {/* Inline Expense Form */}
+                {showExpenseForm && (
+                  <div style={{
+                    backgroundColor: '#f8f9fa',
+                    padding: '20px',
+                    borderRadius: '8px',
+                    marginTop: '15px',
+                    marginBottom: '20px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '15px'
+                    }}>
+                      <div style={{ width: '100%' }}>
+                        <label style={{
+                          display: 'block',
+                          marginBottom: '5px',
+                          fontSize: '0.9rem',
+                          color: '#666'
+                        }}>
+                          Amount:
+                        </label>
+                        <input
+                          type="number"
+                          value={newExpense.amount}
+                          onChange={(e) => setNewExpense({
+                            ...newExpense,
+                            amount: e.target.value
+                          })}
+                          min="0"
+                          step="0.01"
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            fontSize: '1rem',
+                            color: '#000'
+                          }}
+                        />
+                      </div>
+                      <div style={{ width: '100%' }}>
+                        <label style={{
+                          display: 'block',
+                          marginBottom: '5px',
+                          fontSize: '0.9rem',
+                          color: '#666'
+                        }}>
+                          Purpose:
+                        </label>
+                        <select
+                          value={newExpense.purpose}
+                          onChange={(e) => setNewExpense({
+                            ...newExpense,
+                            purpose: e.target.value
+                          })}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            fontSize: '1rem',
+                            backgroundColor: 'white',
+                            color: '#000'
+                          }}
+                        >
+                          <option value="labour">Labour</option>
+                          <option value="material">Material</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                      <div style={{ marginTop: '10px' }}>
+                        <button 
+                          onClick={() => {
+                            handleAddExpense();
+                            setShowExpenseForm(false);
+                          }}
+                          style={{
+                            padding: '8px 20px',
+                            backgroundColor: '#007bff',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '1rem',
+                            width: '100%'
+                          }}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="expenses-list">
+                  {expenses.length > 0 ? (
+                    expenses.map((expense) => (
+                      <div key={expense._id} className="expense-card">
+                        <div className="expense-header">
+                          <span className={`expense-purpose ${expense.purpose}`}>
+                            {expense.purpose.charAt(0).toUpperCase() + expense.purpose.slice(1)}
+                          </span>
+                          <span className="expense-date">
+                            {formatDate(expense.date)}
+                          </span>
+                        </div>
+                        <div style={styles.expenseDetails}>
+                          <div className="expense-amount">
+                            ₹{parseFloat(expense.amount).toLocaleString()}
+                          </div>
+                          {expense.userId && userNames[expense.userId] && (
+                            <div style={styles.expenseUser}>
+                              Added by: {userNames[expense.userId]}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="no-expenses">
+                      <p>No expenses recorded yet</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Edit Modal */}
           {showEditModal && (
-            <div className="modal-overlay">
-              <div className="modal">
+            <div className="modal-overlay" style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 999
+            }}>
+              <div className="modal" style={{
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                width: '100%',
+                maxWidth: '500px',
+                maxHeight: '80vh',
+                overflowY: 'auto',
+                zIndex: 1000,
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+              }}>
                 <div className="modal-header">
                   <h2>Edit Client Details</h2>
                   <button className="close-button" onClick={() => setShowEditModal(false)}>&times;</button>
@@ -289,74 +2043,127 @@ function ClientDetails() {
             </div>
           )}
 
-          {/* First Row - Client Details in Two Columns */}
-          <div className="client-details-row">
-            <div className="client-details-column">
-              <div className="detail-row">
-                <span className="detail-label">Client Name:</span>
-                <span className="detail-value">{client.clientName}</span>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Email:</span>
-                <span className="detail-value">{client.email}</span>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Phone Number:</span>
-                <span className="detail-value">{client.phoneNumber}</span>
-              </div>
-            </div>
-            <div className="client-details-column">
-              <div className="detail-row">
-                <span className="detail-label">Location:</span>
-                <span className="detail-value">{client.location}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Second Row - Stage and Estimate Information */}
-          <div className="stage-estimate-row">
-            {client.stage > 0 && (
-              <div className="stage-section">
-                <div className="current-stage">
-                  <span className="stage-label">Current Stage</span>
-                  <span className="stage-number">{client.stage}</span>
+          {/* Stage Notes Modal */}
+          {showStageModal && (
+            <div className="modal-overlay" style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 999
+            }}>
+              <div className="modal" style={{
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                width: '100%',
+                maxWidth: '500px',
+                maxHeight: '80vh',
+                overflowY: 'auto',
+                zIndex: 1000,
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+              }}>
+                <div className="modal-header">
+                  <h2>Add New Stage</h2>
+                  <button className="close-button" onClick={() => setShowStageModal(false)}>&times;</button>
                 </div>
-                <button 
-                  className="add-stage-btn"
-                  onClick={handleAddStage}
-                >
-                  Add Stage
-                </button>
+                <div className="stage-form">
+                  <div className="form-group">
+                    <label>Stage Notes:</label>
+                    <textarea
+                      value={stageNote}
+                      onChange={(e) => setStageNote(e.target.value)}
+                      placeholder="Enter stage notes..."
+                      rows="4"
+                      className="stage-notes-textarea"
+                    />
+                  </div>
+                  <div className="form-actions">
+                    <button 
+                      className="cancel-button" 
+                      onClick={() => {
+                        setShowStageModal(false);
+                        setStageNote("");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      className="submit-button"
+                      onClick={handleStageSubmit}
+                    >
+                      Add Stage
+                    </button>
+                  </div>
+                </div>
               </div>
-            )}
-            <div className="estimate-section">
-              {client.stage === 0 ? (
-                <button 
-                  className="prepare-estimate-btn"
-                  onClick={handlePrepareEstimate}
-                >
-                  Prepare Estimate
-                </button>
-              ) : (
-                <>
-                  <button 
-                    className="view-estimate-btn"
-                    onClick={() => handleViewEstimate(id)}
-                  >
-                    View Estimate
-                  </button>
-                  {grandTotals.length > 0 && (
-                    <div className="estimate-amount">
-                      <span className="amount-label">Grand Total:</span>
-                      <span className="amount-value">
-                        ₹{parseFloat(grandTotals[0]).toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-                </>
-              )}
             </div>
-          </div>
+          )}
+
+          {/* Edit Payment Modal */}
+          {showEditPaymentModal && (
+            <div className="modal-overlay" style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 999
+            }}>
+              <div className="modal" style={{
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                width: '100%',
+                maxWidth: '500px',
+                maxHeight: '80vh',
+                overflowY: 'auto',
+                zIndex: 1000,
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+              }}>
+                <div className="modal-header">
+                  <h2>Edit Payment Amount</h2>
+                  <button className="close-button" onClick={() => setShowEditPaymentModal(false)}>&times;</button>
+                </div>
+                <div className="payment-form">
+                  <div className="form-group">
+                    <label>Amount:</label>
+                    <input
+                      type="number"
+                      value={editPaymentData.amount}
+                      onChange={(e) => setEditPaymentData({
+                        ...editPaymentData,
+                        amount: e.target.value
+                      })}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="form-actions">
+                    <button 
+                      className="cancel-button" 
+                      onClick={() => setShowEditPaymentModal(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      className="submit-button"
+                      onClick={handleUpdatePayment}
+                    >
+                      Update
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
