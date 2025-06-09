@@ -610,12 +610,13 @@ function CompletedProjectDetails() {
         }),
         expense.purpose.charAt(0).toUpperCase() + expense.purpose.slice(1),
         `INR ${parseFloat(expense.amount).toLocaleString()}`,
-        expense.userId ? userNames[expense.userId] || 'N/A' : 'N/A'
+        expense.userId ? userNames[expense.userId] || 'N/A' : 'N/A',
+        expense.notes || 'No notes'
       ]);
 
       autoTable(doc, {
         startY: yPos,
-        head: [['Date', 'Category', 'Amount', 'Added By']],
+        head: [['Date', 'Category', 'Amount', 'Added By', 'Notes']],
         body: expenseList,
         theme: 'grid',
         styles: { fontSize: 10, cellPadding: 5 },
@@ -882,6 +883,37 @@ function CompletedProjectDetails() {
                       marginBottom: '12px',
                       textTransform: 'uppercase',
                       letterSpacing: '0.5px'
+                    }}>Payment Received</h4>
+                    <p style={{
+                      fontSize: '24px',
+                      fontWeight: 'bold',
+                      color: '#4CAF50',
+                      marginBottom: '0',
+                      lineHeight: '1.2'
+                    }}>
+                      ₹{totalPaid.toLocaleString()}
+                    </p>
+                    <span style={{
+                      color: '#64748b',
+                      fontSize: '14px',
+                      display: 'block',
+                      marginTop: '8px'
+                    }}>
+                      {((totalPaid / parseFloat(grandTotals[0] || 0)) * 100).toFixed(1)}% received
+                    </span>
+                  </div>
+                  <div className="overview-card" style={{
+                    backgroundColor: '#f8f9fa',
+                    padding: '20px',
+                    borderRadius: '10px',
+                    border: '1px solid #e3e8ef'
+                  }}>
+                    <h4 style={{
+                      fontSize: '14px',
+                      color: '#64748b',
+                      marginBottom: '12px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
                     }}>Total Expenses</h4>
                     <p style={{
                       fontSize: '24px',
@@ -892,6 +924,14 @@ function CompletedProjectDetails() {
                     }}>
                       ₹{totalExpenses.toLocaleString()}
                     </p>
+                    <span style={{
+                      color: '#64748b',
+                      fontSize: '14px',
+                      display: 'block',
+                      marginTop: '8px'
+                    }}>
+                      {((totalExpenses / parseFloat(grandTotals[0] || 0)) * 100).toFixed(1)}% of project value
+                    </span>
                   </div>
                   <div className="overview-card" style={{
                     backgroundColor: '#f8f9fa',
@@ -1006,6 +1046,7 @@ function CompletedProjectDetails() {
                         <th style={{ padding: '12px' }}>Purpose</th>
                         <th style={{ padding: '12px' }}>Amount</th>
                         <th style={{ padding: '12px' }}>Added By</th>
+                        <th style={{ padding: '12px' }}>Notes</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1025,6 +1066,9 @@ function CompletedProjectDetails() {
                           <td style={{ padding: '12px' }}>
                             {expense.userId ? userNames[expense.userId] : 'N/A'}
                           </td>
+                          <td style={{ padding: '12px' }}>
+                            {expense.notes || 'No notes'}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1040,13 +1084,16 @@ function CompletedProjectDetails() {
                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
               }}>
                 <h3>Expense Categories</h3>
+                
+                {/* Category Totals */}
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
                   gap: '15px',
-                  marginTop: '15px'
+                  marginTop: '15px',
+                  marginBottom: '30px'
                 }}>
-                  {/* Labour Expenses */}
+                  {/* Labour Total Card */}
                   <div style={{
                     backgroundColor: '#fff3e0',
                     padding: '15px',
@@ -1066,7 +1113,7 @@ function CompletedProjectDetails() {
                     </span>
                   </div>
 
-                  {/* Material Expenses */}
+                  {/* Material Total Card */}
                   <div style={{
                     backgroundColor: '#e3f2fd',
                     padding: '15px',
@@ -1086,7 +1133,7 @@ function CompletedProjectDetails() {
                     </span>
                   </div>
 
-                  {/* Other Expenses */}
+                  {/* Other Total Card */}
                   <div style={{
                     backgroundColor: '#f3e5f5',
                     padding: '15px',
@@ -1104,6 +1151,186 @@ function CompletedProjectDetails() {
                         .filter(e => e.purpose === 'other')
                         .reduce((sum, e) => sum + parseFloat(e.amount), 0) / totalExpenses) * 100).toFixed(1)}% of total
                     </span>
+                  </div>
+                </div>
+
+                {/* Labour Expenses Table */}
+                <div style={{ marginBottom: '30px' }}>
+                  <h4 style={{ 
+                    color: '#e65100',
+                    backgroundColor: '#fff3e0',
+                    padding: '10px 15px',
+                    borderRadius: '8px',
+                    marginBottom: '15px'
+                  }}>
+                    Labour Expenses
+                  </h4>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      backgroundColor: 'white',
+                      borderRadius: '8px',
+                      overflow: 'hidden'
+                    }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#ffe0b2' }}>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>Amount</th>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>Added By</th>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expenses
+                          .filter(e => e.purpose === 'labour')
+                          .map((expense) => (
+                            <tr key={expense._id} style={{ borderBottom: '1px solid #eee' }}>
+                              <td style={{ padding: '12px' }}>{new Date(expense.date).toLocaleDateString()}</td>
+                              <td style={{ padding: '12px' }}>₹{parseFloat(expense.amount).toLocaleString()}</td>
+                              <td style={{ padding: '12px' }}>{expense.userId ? userNames[expense.userId] : 'N/A'}</td>
+                              <td style={{ padding: '12px' }}>{expense.notes || 'No notes'}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ 
+                          backgroundColor: '#fff3e0',
+                          fontWeight: 'bold',
+                          borderTop: '2px solid #e65100'
+                        }}>
+                          <td style={{ padding: '12px' }}>Total</td>
+                          <td style={{ padding: '12px' }}>
+                            ₹{expenses
+                              .filter(e => e.purpose === 'labour')
+                              .reduce((sum, e) => sum + parseFloat(e.amount), 0)
+                              .toLocaleString()}
+                          </td>
+                          <td style={{ padding: '12px' }}></td>
+                          <td style={{ padding: '12px' }}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Material Expenses Table */}
+                <div style={{ marginBottom: '30px' }}>
+                  <h4 style={{ 
+                    color: '#1565c0',
+                    backgroundColor: '#e3f2fd',
+                    padding: '10px 15px',
+                    borderRadius: '8px',
+                    marginBottom: '15px'
+                  }}>
+                    Material Expenses
+                  </h4>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      backgroundColor: 'white',
+                      borderRadius: '8px',
+                      overflow: 'hidden'
+                    }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#bbdefb' }}>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>Amount</th>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>Added By</th>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expenses
+                          .filter(e => e.purpose === 'material')
+                          .map((expense) => (
+                            <tr key={expense._id} style={{ borderBottom: '1px solid #eee' }}>
+                              <td style={{ padding: '12px' }}>{new Date(expense.date).toLocaleDateString()}</td>
+                              <td style={{ padding: '12px' }}>₹{parseFloat(expense.amount).toLocaleString()}</td>
+                              <td style={{ padding: '12px' }}>{expense.userId ? userNames[expense.userId] : 'N/A'}</td>
+                              <td style={{ padding: '12px' }}>{expense.notes || 'No notes'}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ 
+                          backgroundColor: '#e3f2fd',
+                          fontWeight: 'bold',
+                          borderTop: '2px solid #1565c0'
+                        }}>
+                          <td style={{ padding: '12px' }}>Total</td>
+                          <td style={{ padding: '12px' }}>
+                            ₹{expenses
+                              .filter(e => e.purpose === 'material')
+                              .reduce((sum, e) => sum + parseFloat(e.amount), 0)
+                              .toLocaleString()}
+                          </td>
+                          <td style={{ padding: '12px' }}></td>
+                          <td style={{ padding: '12px' }}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Other Expenses Table */}
+                <div style={{ marginBottom: '20px' }}>
+                  <h4 style={{ 
+                    color: '#7b1fa2',
+                    backgroundColor: '#f3e5f5',
+                    padding: '10px 15px',
+                    borderRadius: '8px',
+                    marginBottom: '15px'
+                  }}>
+                    Other Expenses
+                  </h4>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      backgroundColor: 'white',
+                      borderRadius: '8px',
+                      overflow: 'hidden'
+                    }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#e1bee7' }}>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>Amount</th>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>Added By</th>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expenses
+                          .filter(e => e.purpose === 'other')
+                          .map((expense) => (
+                            <tr key={expense._id} style={{ borderBottom: '1px solid #eee' }}>
+                              <td style={{ padding: '12px' }}>{new Date(expense.date).toLocaleDateString()}</td>
+                              <td style={{ padding: '12px' }}>₹{parseFloat(expense.amount).toLocaleString()}</td>
+                              <td style={{ padding: '12px' }}>{expense.userId ? userNames[expense.userId] : 'N/A'}</td>
+                              <td style={{ padding: '12px' }}>{expense.notes || 'No notes'}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ 
+                          backgroundColor: '#f3e5f5',
+                          fontWeight: 'bold',
+                          borderTop: '2px solid #7b1fa2'
+                        }}>
+                          <td style={{ padding: '12px' }}>Total</td>
+                          <td style={{ padding: '12px' }}>
+                            ₹{expenses
+                              .filter(e => e.purpose === 'other')
+                              .reduce((sum, e) => sum + parseFloat(e.amount), 0)
+                              .toLocaleString()}
+                          </td>
+                          <td style={{ padding: '12px' }}></td>
+                          <td style={{ padding: '12px' }}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
                 </div>
               </div>

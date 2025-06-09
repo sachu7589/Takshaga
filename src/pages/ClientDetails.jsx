@@ -54,7 +54,8 @@ function ClientDetails() {
   const [expenses, setExpenses] = useState([]);
   const [newExpense, setNewExpense] = useState({
     amount: '',
-    purpose: 'labour'
+    purpose: 'labour',
+    notes: ''  // Initialize notes as empty string
   });
   const [userNames, setUserNames] = useState({});
   const [showExpenseForm, setShowExpenseForm] = useState(false);
@@ -64,17 +65,6 @@ function ClientDetails() {
 
   // Add styles for expense details and financial summary
   const styles = {
-    expenseDetails: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginTop: '8px'
-    },
-    expenseUser: {
-      fontSize: '0.9em',
-      color: '#666',
-      fontStyle: 'italic'
-    },
     financialSummarySection: {
       marginBottom: '2rem',
       padding: '1.5rem',
@@ -187,6 +177,7 @@ function ClientDetails() {
         setClient(clientResponse.data);
         setStages(stagesResponse.data);
         setPayments(paymentsResponse.data);
+        // Expenses are already sorted by date in descending order from the backend
         setExpenses(expensesResponse.data);
         await fetchUserNames(paymentsResponse.data, expensesResponse.data);
         setEditFormData({
@@ -1105,19 +1096,27 @@ function ClientDetails() {
       }
 
       const userId = sessionStorage.getItem('userId');
-      const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/client-expenses`, {
+      // Create the expense data object with all required fields
+      const expenseData = {
         clientId: id,
         userId: userId,
         amount: parseFloat(newExpense.amount),
-        purpose: newExpense.purpose
-      });
+        purpose: newExpense.purpose,
+        notes: newExpense.notes && newExpense.notes.trim() !== '' ? newExpense.notes.trim() : null
+      };
+
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/client-expenses`, expenseData);
 
       if (response.data) {
-        setExpenses([...expenses, response.data]);
+        // Sort expenses by date in descending order to match backend
+        setExpenses(prevExpenses => [...prevExpenses, response.data].sort((a, b) => 
+          new Date(b.date) - new Date(a.date)
+        ));
         setShowExpenseForm(false);
         setNewExpense({
           amount: '',
-          purpose: 'labour'
+          purpose: 'labour',
+          notes: ''
         });
         
         Swal.fire({
@@ -1143,6 +1142,122 @@ function ClientDetails() {
     if (buttonRef.current) {
       setModalState(true);
     }
+  };
+
+  // Render expenses in table format - only tables with totals
+  const renderExpensesTables = () => {
+    // Define category configurations
+    const categoryConfigs = {
+      labour: {
+        name: 'Labour Expenses',
+        headerColor: '#e65100',
+        bgColor: '#fff3e0',
+        tableHeaderBg: '#ffe0b2',
+        footerBg: '#fff3e0',
+        borderColor: '#e65100'
+      },
+      material: {
+        name: 'Material Expenses', 
+        headerColor: '#1565c0',
+        bgColor: '#e3f2fd',
+        tableHeaderBg: '#bbdefb',
+        footerBg: '#e3f2fd',
+        borderColor: '#1565c0'
+      },
+      other: {
+        name: 'Other Expenses',
+        headerColor: '#7b1fa2',
+        bgColor: '#f3e5f5',
+        tableHeaderBg: '#e1bee7',
+        footerBg: '#f3e5f5',
+        borderColor: '#7b1fa2'
+      }
+    };
+
+    return (
+      <div>
+        {/* Individual Category Tables */}
+        {Object.entries(categoryConfigs).map(([category, config]) => {
+          const categoryExpenses = expenses.filter(expense => expense.purpose === category);
+          if (categoryExpenses.length === 0) return null;
+
+          const categoryTotal = categoryExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
+
+          return (
+            <div key={category} style={{ 
+              marginBottom: '25px',
+              width: '100%',
+              maxWidth: '100%',
+              boxSizing: 'border-box'
+            }}>
+              {/* Category Header */}
+              <div style={{
+                backgroundColor: config.headerColor,
+                color: 'white',
+                padding: '12px 16px',
+                borderRadius: '8px 8px 0 0',
+                fontWeight: 'bold',
+                fontSize: '1.1rem',
+                marginBottom: '0'
+              }}>
+                {config.name}
+              </div>
+              <table style={{
+                borderCollapse: 'collapse',
+                backgroundColor: 'white',
+                borderRadius: '0 0 8px 8px',
+                overflow: 'hidden',
+                tableLayout: 'auto',
+                boxSizing: 'border-box'
+              }}>
+                  <thead>
+                    <tr style={{ backgroundColor: config.tableHeaderBg }}>
+                      <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
+                      <th style={{ padding: '12px', textAlign: 'left' }}>Amount</th>
+                      <th style={{ padding: '12px', textAlign: 'left' }}>Added By</th>
+                      <th style={{ padding: '12px', textAlign: 'left' }}>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {categoryExpenses
+                      .sort((a, b) => new Date(b.date) - new Date(a.date))
+                      .map((expense) => (
+                        <tr key={expense._id} style={{ borderBottom: '1px solid #eee' }}>
+                          <td style={{ padding: '12px' }}>
+                            {new Date(expense.date).toLocaleDateString()}
+                          </td>
+                          <td style={{ padding: '12px' }}>
+                            ₹{parseFloat(expense.amount).toLocaleString()}
+                          </td>
+                          <td style={{ padding: '12px' }}>
+                            {expense.userId ? userNames[expense.userId] : 'N/A'}
+                          </td>
+                          <td style={{ padding: '12px' }}>
+                            {expense.notes || 'No notes'}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ 
+                      backgroundColor: config.footerBg,
+                      fontWeight: 'bold',
+                      borderTop: `2px solid ${config.borderColor}`
+                    }}>
+                      <td style={{ padding: '12px' }}>Total</td>
+                      <td style={{ padding: '12px' }}>
+                        ₹{categoryTotal.toLocaleString()}
+                      </td>
+                      <td style={{ padding: '12px' }}></td>
+                      <td style={{ padding: '12px' }}></td>
+                    </tr>
+                  </tfoot>
+                </table>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   if (isLoading) {
@@ -1390,17 +1505,17 @@ function ClientDetails() {
               {estimateStatus === 2 && (
                 <div className="financial-overview">
                   {/* Summary Cards */}
-                  <div className="summary-section">
+                  <div className="summary-section" style={styles.financialSummarySection}>
                     <h3>Financial Summary</h3>
-                    <div className="summary-cards">
+                    <div style={styles.summaryCards}>
                       {/* Total Payments Received */}
-                      <div className="summary-card payments">
-                        <div className="card-icon">
+                      <div style={styles.summaryCard}>
+                        <div style={{...styles.summaryIcon, ...styles.paymentsIcon}}>
                           <i className="fas fa-money-bill-wave"></i>
                         </div>
-                        <div className="card-details">
-                          <h4>Total Payments Received</h4>
-                          <span className="amount">
+                        <div style={styles.summaryDetails}>
+                          <h4 style={styles.summaryTitle}>Total Payments Received</h4>
+                          <span style={styles.summaryAmount}>
                             ₹{payments
                               .filter(p => p.status === 'paid')
                               .reduce((sum, p) => sum + parseFloat(p.amount), 0)
@@ -1410,13 +1525,13 @@ function ClientDetails() {
                       </div>
 
                       {/* Total Expenses */}
-                      <div className="summary-card expenses">
-                        <div className="card-icon">
+                      <div style={styles.summaryCard}>
+                        <div style={{...styles.summaryIcon, ...styles.expensesIcon}}>
                           <i className="fas fa-file-invoice-dollar"></i>
                         </div>
-                        <div className="card-details">
-                          <h4>Total Expenses</h4>
-                          <span className="amount">
+                        <div style={styles.summaryDetails}>
+                          <h4 style={styles.summaryTitle}>Total Expenses</h4>
+                          <span style={styles.summaryAmount}>
                             ₹{expenses
                               .reduce((sum, e) => sum + parseFloat(e.amount), 0)
                               .toLocaleString()}
@@ -1425,13 +1540,13 @@ function ClientDetails() {
                       </div>
 
                       {/* Net Balance */}
-                      <div className="summary-card balance">
-                        <div className="card-icon">
+                      <div style={styles.summaryCard}>
+                        <div style={{...styles.summaryIcon, ...styles.balanceIcon}}>
                           <i className="fas fa-wallet"></i>
                         </div>
-                        <div className="card-details">
-                          <h4>Net Balance</h4>
-                          <span className="amount">
+                        <div style={styles.summaryDetails}>
+                          <h4 style={styles.summaryTitle}>Net Balance</h4>
+                          <span style={styles.summaryAmount}>
                             ₹{(
                               payments
                                 .filter(p => p.status === 'paid')
@@ -1459,46 +1574,6 @@ function ClientDetails() {
                       gap: '1.5rem',
                       marginTop: '1rem'
                     }}>
-                      {/* Materials Expenses */}
-                      <div className="expense-category materials" style={{
-                        backgroundColor: 'white',
-                        padding: '1.5rem',
-                        borderRadius: '8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '1rem'
-                      }}>
-                        <div className="category-icon" style={{
-                          backgroundColor: '#e3f2fd',
-                          color: '#1976d2',
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '50%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}>
-                          <i className="fas fa-tools"></i>
-                        </div>
-                        <div className="category-info" style={{
-                          flex: 1
-                        }}>
-                          <h4 style={{ margin: '0', color: '#666', fontSize: '0.9rem' }}>Materials</h4>
-                          <span className="amount" style={{
-                            fontSize: '1.5rem',
-                            fontWeight: 'bold',
-                            color: '#333',
-                            display: 'block',
-                            marginTop: '0.25rem'
-                          }}>
-                            ₹{expenses
-                              .filter(e => e.purpose === 'material')
-                              .reduce((sum, e) => sum + parseFloat(e.amount), 0)
-                              .toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-
                       {/* Labour Expenses */}
                       <div className="expense-category labour" style={{
                         backgroundColor: 'white',
@@ -1533,6 +1608,46 @@ function ClientDetails() {
                           }}>
                             ₹{expenses
                               .filter(e => e.purpose === 'labour')
+                              .reduce((sum, e) => sum + parseFloat(e.amount), 0)
+                              .toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Materials Expenses */}
+                      <div className="expense-category materials" style={{
+                        backgroundColor: 'white',
+                        padding: '1.5rem',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '1rem'
+                      }}>
+                        <div className="category-icon" style={{
+                          backgroundColor: '#e3f2fd',
+                          color: '#1976d2',
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <i className="fas fa-tools"></i>
+                        </div>
+                        <div className="category-info" style={{
+                          flex: 1
+                        }}>
+                          <h4 style={{ margin: '0', color: '#666', fontSize: '0.9rem' }}>Materials</h4>
+                          <span className="amount" style={{
+                            fontSize: '1.5rem',
+                            fontWeight: 'bold',
+                            color: '#333',
+                            display: 'block',
+                            marginTop: '0.25rem'
+                          }}>
+                            ₹{expenses
+                              .filter(e => e.purpose === 'material')
                               .reduce((sum, e) => sum + parseFloat(e.amount), 0)
                               .toLocaleString()}
                           </span>
@@ -1583,9 +1698,254 @@ function ClientDetails() {
                 </div>
               )}
 
+            {/* Central Content Area - Financial Details */}
+            {estimateStatus === 2 && (
+              <div className="central-financial-section" style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2rem',
+                flex: '1',
+                maxWidth: '100%'
+              }}>
+                {/* Expenses Section - Centrally positioned */}
+                <div className="expenses-section" style={{
+                  backgroundColor: '#fff',
+                  borderRadius: '12px',
+                  padding: '2rem',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  border: '1px solid #e0e0e0',
+                  width: '100%',
+                  maxWidth: '100%',
+                  boxSizing: 'border-box'
+                }}>
+                  <div className="expenses-header" style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '1.5rem',
+                    paddingBottom: '1rem',
+                    borderBottom: '2px solid #f0f0f0'
+                  }}>
+                    <h3 style={{
+                      margin: 0,
+                      fontSize: '1.5rem',
+                      color: '#333',
+                      fontWeight: '600'
+                    }}>Project Expenses</h3>
+                    <button 
+                      className="add-expense-btn"
+                      onClick={() => setShowExpenseForm(!showExpenseForm)}
+                      style={{
+                        padding: '10px 20px',
+                        backgroundColor: showExpenseForm ? '#dc3545' : '#28a745',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '0.9rem',
+                        fontWeight: '500',
+                        transition: 'background-color 0.3s ease'
+                      }}
+                    >
+                      <i className={showExpenseForm ? 'fas fa-times' : 'fas fa-plus'}></i>
+                      {showExpenseForm ? ' Cancel' : ' Add Expense'}
+                    </button>
+                  </div>
+
+                  {/* Inline Expense Form */}
+                  {showExpenseForm && (
+                    <div style={{
+                      backgroundColor: '#f8f9fa',
+                      padding: '25px',
+                      borderRadius: '10px',
+                      marginBottom: '25px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                      border: '1px solid #e9ecef'
+                    }}>
+                      <h4 style={{
+                        marginTop: 0,
+                        marginBottom: '20px',
+                        color: '#333',
+                        fontSize: '1.1rem'
+                      }}>Add New Expense</h4>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                        gap: '20px'
+                      }}>
+                        <div>
+                          <label style={{
+                            display: 'block',
+                            marginBottom: '8px',
+                            fontSize: '0.95rem',
+                            color: '#555',
+                            fontWeight: '500'
+                          }}>
+                            Amount (₹):
+                          </label>
+                          <input
+                            type="number"
+                            value={newExpense.amount}
+                            onChange={(e) => setNewExpense({
+                              ...newExpense,
+                              amount: e.target.value
+                            })}
+                            min="0"
+                            step="0.01"
+                            placeholder="Enter amount"
+                            style={{
+                              width: '100%',
+                              padding: '12px',
+                              border: '2px solid #ddd',
+                              borderRadius: '6px',
+                              fontSize: '1rem',
+                              color: '#000',
+                              transition: 'border-color 0.3s ease',
+                              backgroundColor: 'white'
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{
+                            display: 'block',
+                            marginBottom: '8px',
+                            fontSize: '0.95rem',
+                            color: '#555',
+                            fontWeight: '500'
+                          }}>
+                            Category:
+                          </label>
+                          <select
+                            value={newExpense.purpose}
+                            onChange={(e) => setNewExpense({
+                              ...newExpense,
+                              purpose: e.target.value
+                            })}
+                            style={{
+                              width: '100%',
+                              padding: '12px',
+                              border: '2px solid #ddd',
+                              borderRadius: '6px',
+                              fontSize: '1rem',
+                              backgroundColor: 'white',
+                              color: '#000',
+                              transition: 'border-color 0.3s ease'
+                            }}
+                          >
+                            <option value="labour">Labour</option>
+                            <option value="material">Material</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ marginTop: '20px' }}>
+                        <label style={{
+                          display: 'block',
+                          marginBottom: '8px',
+                          fontSize: '0.95rem',
+                          color: '#555',
+                          fontWeight: '500'
+                        }}>
+                          Notes (Optional):
+                        </label>
+                        <textarea
+                          value={newExpense.notes || ''}
+                          onChange={(e) => setNewExpense({
+                            ...newExpense,
+                            notes: e.target.value
+                          })}
+                          placeholder="Enter additional notes or description..."
+                          rows="3"
+                          style={{
+                            width: '100%',
+                            padding: '12px',
+                            border: '2px solid #ddd',
+                            borderRadius: '6px',
+                            fontSize: '1rem',
+                            color: '#000',
+                            resize: 'vertical',
+                            backgroundColor: 'white',
+                            transition: 'border-color 0.3s ease'
+                          }}
+                        />
+                      </div>
+                      <div style={{ 
+                        marginTop: '25px',
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        gap: '15px'
+                      }}>
+                        <button 
+                          onClick={() => setShowExpenseForm(false)}
+                          style={{
+                            padding: '10px 20px',
+                            backgroundColor: '#6c757d',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.9rem',
+                            fontWeight: '500'
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          onClick={() => {
+                            handleAddExpense();
+                            setShowExpenseForm(false);
+                          }}
+                          disabled={!newExpense.amount || parseFloat(newExpense.amount) <= 0}
+                          style={{
+                            padding: '10px 25px',
+                            backgroundColor: newExpense.amount && parseFloat(newExpense.amount) > 0 ? '#007bff' : '#ccc',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: newExpense.amount && parseFloat(newExpense.amount) > 0 ? 'pointer' : 'not-allowed',
+                            fontSize: '0.9rem',
+                            fontWeight: '500',
+                            transition: 'background-color 0.3s ease'
+                          }}
+                        >
+                          <i className="fas fa-plus"></i> Add Expense
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Expenses List with improved styling */}
+                  <div className="expenses-list" style={{
+                    width: '100%',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box'
+                  }}>
+                                        {expenses.length > 0 ? (
+                      renderExpensesTables()
+                    ) : (
+                      <div style={{
+                        textAlign: 'center',
+                        padding: '3rem',
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: '10px',
+                        border: '2px dashed #dee2e6'
+                      }}>
+                        <i className="fas fa-receipt" style={{ fontSize: '3rem', color: '#6c757d', marginBottom: '1rem' }}></i>
+                        <h4 style={{ color: '#6c757d', margin: '0 0 0.5rem 0' }}>No expenses recorded yet</h4>
+                        <p style={{ color: '#6c757d', margin: 0 }}>Click "Add Expense" to record your first project expense</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Right Section - Payment History */}
             {payments.length > 0 && (
-              <div className="payment-history-section">
+              <div className="payment-history-section" style={{
+                minWidth: '400px',
+                maxWidth: '500px'
+              }}>
                 <h3>Payment History</h3>
                 <div className="payments-list">
                   {/* Show Balance Card First */}
@@ -1819,149 +2179,6 @@ function ClientDetails() {
                       >
                         <i className="fas fa-file-pdf"></i> Download Payment Report
                       </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Expenses Section - Only show when estimate is approved */}
-            {estimateStatus === 2 && (
-              <div className="expenses-section">
-                <div className="expenses-header">
-                  <h3>Expenses</h3>
-                  <button 
-                    className="add-expense-btn"
-                    onClick={() => setShowExpenseForm(!showExpenseForm)}
-                  >
-                    {showExpenseForm ? 'Cancel' : 'Add Expense'}
-                  </button>
-                </div>
-
-                {/* Inline Expense Form */}
-                {showExpenseForm && (
-                  <div style={{
-                    backgroundColor: '#f8f9fa',
-                    padding: '20px',
-                    borderRadius: '8px',
-                    marginTop: '15px',
-                    marginBottom: '20px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-                  }}>
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '15px'
-                    }}>
-                      <div style={{ width: '100%' }}>
-                        <label style={{
-                          display: 'block',
-                          marginBottom: '5px',
-                          fontSize: '0.9rem',
-                          color: '#666'
-                        }}>
-                          Amount:
-                        </label>
-                        <input
-                          type="number"
-                          value={newExpense.amount}
-                          onChange={(e) => setNewExpense({
-                            ...newExpense,
-                            amount: e.target.value
-                          })}
-                          min="0"
-                          step="0.01"
-                          style={{
-                            width: '100%',
-                            padding: '8px 12px',
-                            border: '1px solid #ddd',
-                            borderRadius: '4px',
-                            fontSize: '1rem',
-                            color: '#000'
-                          }}
-                        />
-                      </div>
-                      <div style={{ width: '100%' }}>
-                        <label style={{
-                          display: 'block',
-                          marginBottom: '5px',
-                          fontSize: '0.9rem',
-                          color: '#666'
-                        }}>
-                          Purpose:
-                        </label>
-                        <select
-                          value={newExpense.purpose}
-                          onChange={(e) => setNewExpense({
-                            ...newExpense,
-                            purpose: e.target.value
-                          })}
-                          style={{
-                            width: '100%',
-                            padding: '8px 12px',
-                            border: '1px solid #ddd',
-                            borderRadius: '4px',
-                            fontSize: '1rem',
-                            backgroundColor: 'white',
-                            color: '#000'
-                          }}
-                        >
-                          <option value="labour">Labour</option>
-                          <option value="material">Material</option>
-                          <option value="other">Other</option>
-                        </select>
-                      </div>
-                      <div style={{ marginTop: '10px' }}>
-                        <button 
-                          onClick={() => {
-                            handleAddExpense();
-                            setShowExpenseForm(false);
-                          }}
-                          style={{
-                            padding: '8px 20px',
-                            backgroundColor: '#007bff',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '1rem',
-                            width: '100%'
-                          }}
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="expenses-list">
-                  {expenses.length > 0 ? (
-                    expenses.map((expense) => (
-                      <div key={expense._id} className="expense-card">
-                        <div className="expense-header">
-                          <span className={`expense-purpose ${expense.purpose}`}>
-                            {expense.purpose.charAt(0).toUpperCase() + expense.purpose.slice(1)}
-                          </span>
-                          <span className="expense-date">
-                            {formatDate(expense.date)}
-                          </span>
-                        </div>
-                        <div style={styles.expenseDetails}>
-                          <div className="expense-amount">
-                            ₹{parseFloat(expense.amount).toLocaleString()}
-                          </div>
-                          {expense.userId && userNames[expense.userId] && (
-                            <div style={styles.expenseUser}>
-                              Added by: {userNames[expense.userId]}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="no-expenses">
-                      <p>No expenses recorded yet</p>
                     </div>
                   )}
                 </div>
