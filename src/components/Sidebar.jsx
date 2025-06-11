@@ -1,6 +1,6 @@
 // Sidebar Component
 import { NavLink, useNavigate } from "react-router-dom";
-import { Home, LogOut, Database, Users, Package, BookOpen, BadgeIndianRupee, CreditCard, ChartNoAxesCombined, SlidersHorizontal } from "lucide-react";
+import { Home, LogOut, Database, Users, Package, BookOpen, BadgeIndianRupee, CreditCard, ChartNoAxesCombined, SlidersHorizontal, Building2 } from "lucide-react";
 import Swal from 'sweetalert2';
 
 const Sidebar = ({ isOpen }) => {
@@ -109,6 +109,17 @@ const Sidebar = ({ isOpen }) => {
             >
               <CreditCard size={20}/>
               Expenses
+            </NavLink>
+          </li>
+          <li>
+            <NavLink
+              to="/bank"
+              className={({ isActive }) =>
+                `nav-link ${isActive ? 'active' : ''}`
+              }
+            >
+              <Building2 size={20}/>
+              Bank
             </NavLink>
           </li>
           <li>

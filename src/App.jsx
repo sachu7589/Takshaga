@@ -9,6 +9,7 @@ import Sections_Managment from './pages/Sections_Managment'
 import Estimate from './pages/Estimate'
 import Add_Income from './pages/Add_Income'
 import Expense from './pages/Expense'
+import Bank from './pages/Bank'
 import Report from './pages/Report'
 import Preset from './pages/Preset'
 import Estimate_Generation from './pages/Estimate_Generation'
@@ -35,6 +36,7 @@ function App() {
         <Route path='/estimate' element={<Estimate/>}/>
         <Route path='/additional-income' element={<Add_Income/>}/>
         <Route path='/expense' element={<Expense/>}/>
+        <Route path='/bank' element={<Bank/>}/>
         <Route path='/report' element={<Report/>}/>
         <Route path='/preset' element={<Preset/>}/>
         <Route path='/estimate_generation' element={<Estimate_Generation/>}/>

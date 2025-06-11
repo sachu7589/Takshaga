@@ -63,6 +63,10 @@ function ClientDetails() {
   const addStageButtonRef = useRef(null);
   const editPaymentButtonRef = useRef(null);
 
+  // Add these new state variables for bank selection
+  const [banks, setBanks] = useState([]);
+  const [selectedBank, setSelectedBank] = useState(null);
+
   // Add styles for expense details and financial summary
   const styles = {
     financialSummarySection: {
@@ -163,11 +167,12 @@ function ClientDetails() {
       };
       try {
         setIsLoading(true);
-        const [clientResponse, stagesResponse, paymentsResponse, expensesResponse] = await Promise.all([
+        const [clientResponse, stagesResponse, paymentsResponse, expensesResponse, banksResponse] = await Promise.all([
           axios.get(`${import.meta.env.VITE_API_URL}/api/clients/display/${id}`),
           axios.get(`${import.meta.env.VITE_API_URL}/api/stages/client/${id}`),
           axios.get(`${import.meta.env.VITE_API_URL}/api/client-payments/client/${id}`),
-          axios.get(`${import.meta.env.VITE_API_URL}/api/client-expenses/client/${id}`)
+          axios.get(`${import.meta.env.VITE_API_URL}/api/client-expenses/client/${id}`),
+          axios.get(`${import.meta.env.VITE_API_URL}/api/banks/display`)
         ]);
 
         if (!clientResponse.data) {
@@ -179,6 +184,8 @@ function ClientDetails() {
         setPayments(paymentsResponse.data);
         // Expenses are already sorted by date in descending order from the backend
         setExpenses(expensesResponse.data);
+        setBanks(banksResponse.data);
+        // Don't set any default bank - user must select one
         await fetchUserNames(paymentsResponse.data, expensesResponse.data);
         setEditFormData({
           clientName: clientResponse.data.clientName,
@@ -573,8 +580,12 @@ function ClientDetails() {
 
   const generateQRCode = async (amount) => {
     try {
-      // Create UPI payment URL
-      const upiUrl = `upi://pay?pa=takshagaarchitects@hdfcbank&pn=TakshagaArchitects&am=${amount}&cu=INR`;
+      if (!selectedBank || !selectedBank.upiId) {
+        console.warn('No UPI ID available for QR code generation');
+        return null;
+      }
+      // Create UPI payment URL using selected bank's UPI ID
+      const upiUrl = `upi://pay?pa=${selectedBank.upiId}&pn=${selectedBank.accountName}&am=${amount}&cu=INR`;
       // Generate QR code as data URL
       return await QRCode.toDataURL(upiUrl);
     } catch (error) {
@@ -585,6 +596,17 @@ function ClientDetails() {
 
   const handleDownloadInvoice = async (payment) => {
     try {
+      // Check if a bank is selected
+      if (!selectedBank) {
+        Swal.fire({
+          title: 'No Bank Account Selected',
+          text: 'Please select a bank account from the dropdown in the Payment History section before generating the invoice.',
+          icon: 'warning',
+          confirmButtonText: 'OK'
+        });
+        return;
+      }
+
       // Get the payment index to determine the phase
       const paymentIndex = payments.findIndex(p => p._id === payment._id);
       if (paymentIndex === -1) {
@@ -701,20 +723,36 @@ function ClientDetails() {
       yPos += 10;
       doc.setFontSize(10);
       doc.setFont(undefined, 'normal');
-      doc.text([
-        "Bank: HDFC Bank",
-        "Account Name: Takshaga Architects",
-        "Account Number: 5678 9012 3456",
-        "IFSC Code: HDFC0004567",
-        "Account Type: Current Account",
-        "UPI ID: takshagaarchitects@hdfcbank"
-      ], 15, yPos);
+      
+      // Use selected bank details or fallback to default
+      const bankDetails = selectedBank ? [
+        `Bank: ${selectedBank.bankName}`,
+        `Account Name: ${selectedBank.accountName}`,
+        `Account Number: ${selectedBank.accountNumber}`,
+        `IFSC Code: ${selectedBank.ifscCode}`,
+        `Account Type: ${selectedBank.accountType || 'N/A'}`,
+        `UPI ID: ${selectedBank.upiId || 'N/A'}`
+      ] : [
+        "Bank: Please select a bank account",
+        "Account Name: N/A",
+        "Account Number: N/A", 
+        "IFSC Code: N/A",
+        "Account Type: N/A",
+        "UPI ID: N/A"
+      ];
+      
+      doc.text(bankDetails, 15, yPos);
 
       // Add QR code if generated successfully
       if (qrCodeDataUrl) {
         doc.addImage(qrCodeDataUrl, 'PNG', 110, yPos - 5, 50, 50);
         doc.setFontSize(9);
         doc.text("Scan to pay via UPI", 110, yPos + 55);
+        doc.text(`Pay to: ${selectedBank.accountName}`, 110, yPos + 62);
+      } else if (selectedBank && !selectedBank.upiId) {
+        doc.setFontSize(9);
+        doc.text("QR code not available", 110, yPos + 10);
+        doc.text("(No UPI ID configured)", 110, yPos + 20);
       }
 
       yPos += 80;
@@ -1947,6 +1985,82 @@ function ClientDetails() {
                 maxWidth: '500px'
               }}>
                 <h3>Payment History</h3>
+                
+                                {/* Bank Selection Section */}
+                {banks.length > 0 && (
+                  <div className="bank-selection-section" style={{
+                    backgroundColor: '#f8f9fa',
+                    padding: '1rem',
+                    borderRadius: '8px',
+                    marginBottom: '1.5rem',
+                    border: '1px solid #e9ecef'
+                  }}>
+                    <h4 style={{ 
+                      margin: '0 0 1rem 0', 
+                      fontSize: '1rem', 
+                      color: '#495057',
+                      fontWeight: '600'
+                    }}>
+                      Select Bank Account for Invoices *
+                    </h4>
+                    <div className="bank-dropdown" style={{ position: 'relative' }}>
+                      <select
+                        value={selectedBank?._id || ''}
+                        onChange={(e) => {
+                          const selected = banks.find(bank => bank._id === e.target.value);
+                          setSelectedBank(selected || null);
+                        }}
+                        required
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          border: '2px solid #dee2e6',
+                          borderRadius: '6px',
+                          backgroundColor: 'white',
+                          fontSize: '0.9rem',
+                          color: '#343a40',
+                          cursor: 'pointer',
+                          transition: 'border-color 0.2s ease',
+                          outline: 'none'
+                        }}
+                        onFocus={(e) => {
+                          e.target.style.borderColor = '#1976d2';
+                          e.target.style.boxShadow = '0 0 0 3px rgba(25, 118, 210, 0.1)';
+                        }}
+                        onBlur={(e) => {
+                          e.target.style.borderColor = '#dee2e6';
+                          e.target.style.boxShadow = 'none';
+                        }}
+                      >
+                        <option value="" disabled style={{ color: '#6c757d' }}>
+                          Choose bank account...
+                        </option>
+                        {banks.map((bank) => (
+                          <option 
+                            key={bank._id} 
+                            value={bank._id}
+                            style={{
+                              padding: '0.5rem',
+                              fontSize: '0.9rem'
+                            }}
+                          >
+                            {bank.accountName} - {bank.bankName}
+                          </option>
+                        ))}
+                      </select>
+                      {!selectedBank && (
+                        <div style={{
+                          fontSize: '0.8rem',
+                          color: '#dc3545',
+                          marginTop: '0.5rem'
+                        }}>
+                          Please select a bank account to generate invoices
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="payments-list">
                   {/* Show Balance Card First */}
                   {grandTotals.length > 0 && (
