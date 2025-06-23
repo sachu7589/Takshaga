@@ -39,11 +39,11 @@ function ClientDetails() {
   const [stageNote, setStageNote] = useState("");
   const [stages, setStages] = useState([]);
   const [payments, setPayments] = useState([]);
-  const [showEditPaymentModal, setShowEditPaymentModal] = useState(false);
   const [editPaymentData, setEditPaymentData] = useState({
     id: '',
     amount: ''
   });
+  const [editingPaymentId, setEditingPaymentId] = useState(null);
   const [editFormData, setEditFormData] = useState({
     clientName: "",
     email: "",
@@ -61,7 +61,6 @@ function ClientDetails() {
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const editClientButtonRef = useRef(null);
   const addStageButtonRef = useRef(null);
-  const editPaymentButtonRef = useRef(null);
 
   // Add these new state variables for bank selection
   const [banks, setBanks] = useState([]);
@@ -941,11 +940,11 @@ function ClientDetails() {
   };
 
   const handleEditPayment = (payment) => {
+    setEditingPaymentId(payment._id);
     setEditPaymentData({
       id: payment._id,
-      amount: payment.amount
+      amount: payment.amount.toString() // Convert to string for input field
     });
-    handleModalOpen(editPaymentButtonRef, setShowEditPaymentModal);
   };
 
   const handleUpdatePayment = async () => {
@@ -963,7 +962,8 @@ function ClientDetails() {
             : payment
         ));
 
-        setShowEditPaymentModal(false);
+        setEditingPaymentId(null);
+        setEditPaymentData({ id: '', amount: '' });
         Swal.fire({
           title: 'Success!',
           text: 'Payment amount updated successfully',
@@ -980,6 +980,11 @@ function ClientDetails() {
         confirmButtonText: 'OK'
       });
     }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPaymentId(null);
+    setEditPaymentData({ id: '', amount: '' });
   };
 
   const handleDownloadPaymentReport = async () => {
@@ -2234,6 +2239,7 @@ function ClientDetails() {
                     .sort((a, b) => new Date(a.date) - new Date(b.date))
                     .map((payment, index) => {
                       const percentage = ((parseFloat(payment.amount) / parseFloat(grandTotals[0])) * 100).toFixed(0);
+                      const isEditing = editingPaymentId === payment._id;
                       return (
                         <div key={payment._id} className="payment-card pending">
                           <div className="payment-header">
@@ -2247,17 +2253,91 @@ function ClientDetails() {
                               <div className="info-row">
                                 <span>Amount Due:</span>
                                 <div className="amount-with-percentage">
-                                  <span className="amount-value">
-                                    ₹{parseFloat(payment.amount).toLocaleString()}
-                                  </span>
-                                  <button 
-                                    ref={editPaymentButtonRef}
-                                    className="edit-amount-btn"
-                                    onClick={() => handleEditPayment(payment)}
-                                    title="Edit Amount"
-                                  >
-                                    Edit
-                                  </button>
+                                  {isEditing ? (
+                                    <div className="edit-amount-section">
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <input
+                                          type="number"
+                                          value={editPaymentData.amount}
+                                          onChange={(e) => setEditPaymentData({
+                                            ...editPaymentData,
+                                            amount: e.target.value
+                                          })}
+                                          min="0"
+                                          step="0.01"
+                                          style={{
+                                            padding: '8px 12px',
+                                            border: '2px solid #ddd',
+                                            borderRadius: '4px',
+                                            fontSize: '0.9rem',
+                                            width: '120px',
+                                            color: '#000',
+                                            backgroundColor: '#fff'
+                                          }}
+                                        />
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                          <button 
+                                            className="submit-edit-btn"
+                                            onClick={handleUpdatePayment}
+                                            disabled={!editPaymentData.amount || parseFloat(editPaymentData.amount) <= 0}
+                                            style={{
+                                              padding: '6px 12px',
+                                              backgroundColor: editPaymentData.amount && parseFloat(editPaymentData.amount) > 0 ? '#28a745' : '#ccc',
+                                              color: 'white',
+                                              border: 'none',
+                                              borderRadius: '4px',
+                                              cursor: editPaymentData.amount && parseFloat(editPaymentData.amount) > 0 ? 'pointer' : 'not-allowed',
+                                              fontSize: '0.8rem',
+                                              fontWeight: '500'
+                                            }}
+                                            title="Save changes"
+                                          >
+                                            Submit
+                                          </button>
+                                          <button 
+                                            className="cancel-edit-btn"
+                                            onClick={handleCancelEdit}
+                                            style={{
+                                              padding: '6px 12px',
+                                              backgroundColor: '#dc3545',
+                                              color: 'white',
+                                              border: 'none',
+                                              borderRadius: '4px',
+                                              cursor: 'pointer',
+                                              fontSize: '0.8rem',
+                                              fontWeight: '500'
+                                            }}
+                                            title="Cancel editing"
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <span className="amount-value">
+                                        ₹{parseFloat(payment.amount).toLocaleString()}
+                                      </span>
+                                      <button 
+                                        className="edit-amount-btn"
+                                        onClick={() => handleEditPayment(payment)}
+                                        title="Edit Amount"
+                                        style={{
+                                          padding: '4px 8px',
+                                          backgroundColor: '#007bff',
+                                          color: 'white',
+                                          border: 'none',
+                                          borderRadius: '3px',
+                                          cursor: 'pointer',
+                                          fontSize: '0.7rem',
+                                          marginLeft: '8px'
+                                        }}
+                                      >
+                                        Edit
+                                      </button>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                               <div className="info-row">
@@ -2428,67 +2508,6 @@ function ClientDetails() {
                       onClick={handleStageSubmit}
                     >
                       Add Stage
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Edit Payment Modal */}
-          {showEditPaymentModal && (
-            <div className="modal-overlay" style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              zIndex: 999
-            }}>
-              <div className="modal" style={{
-                backgroundColor: 'white',
-                borderRadius: '8px',
-                width: '100%',
-                maxWidth: '500px',
-                maxHeight: '80vh',
-                overflowY: 'auto',
-                zIndex: 1000,
-                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-              }}>
-                <div className="modal-header">
-                  <h2>Edit Payment Amount</h2>
-                  <button className="close-button" onClick={() => setShowEditPaymentModal(false)}>&times;</button>
-                </div>
-                <div className="payment-form">
-                  <div className="form-group">
-                    <label>Amount:</label>
-                    <input
-                      type="number"
-                      value={editPaymentData.amount}
-                      onChange={(e) => setEditPaymentData({
-                        ...editPaymentData,
-                        amount: e.target.value
-                      })}
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                  <div className="form-actions">
-                    <button 
-                      className="cancel-button" 
-                      onClick={() => setShowEditPaymentModal(false)}
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      className="submit-button"
-                      onClick={handleUpdatePayment}
-                    >
-                      Update
                     </button>
                   </div>
                 </div>
