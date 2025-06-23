@@ -7,6 +7,7 @@ import autoTable from 'jspdf-autotable';
 import Sidebar from "../components/Sidebar";
 import "../assets/styles/Client.css";
 import { Users, Mail, Phone, MapPin, Briefcase, FileText } from "lucide-react";
+import { useAuth } from '../context/AuthContext';
 
 function CompletedProjectDetails() {
   const { id } = useParams();
@@ -19,6 +20,7 @@ function CompletedProjectDetails() {
   const [payments, setPayments] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [userNames, setUserNames] = useState({});
+  const { user } = useAuth();
 
   // Function to fetch user name
   const fetchUserName = async (userId) => {
@@ -37,8 +39,7 @@ function CompletedProjectDetails() {
   };
 
   useEffect(() => {
-    const userId = sessionStorage.getItem('userId');
-    if (!userId) {
+    if (!user) {
       navigate('/');
       return;
     }
@@ -110,7 +111,7 @@ function CompletedProjectDetails() {
     };
 
     fetchData();
-  }, [id, navigate]);
+  }, [id, navigate, user]);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);

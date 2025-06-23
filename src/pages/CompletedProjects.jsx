@@ -5,21 +5,22 @@ import axios from 'axios';
 import Swal from 'sweetalert2';
 import { Users, Mail, Phone, MapPin, Briefcase } from 'lucide-react';
 import '../assets/styles/Client.css';
+import { useAuth } from '../context/AuthContext';
 
 function CompletedProjects() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [completedProjects, setCompletedProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
-    const userId = sessionStorage.getItem('userId');
-    if (!userId) {
+    if (!user) {
       navigate('/');
       return;
     }
     fetchCompletedProjects();
-  }, [navigate]);
+  }, [navigate, user]);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);

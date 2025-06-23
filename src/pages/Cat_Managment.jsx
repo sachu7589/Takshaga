@@ -5,9 +5,11 @@ import { Plus, Pencil, Trash2, CirclePlus } from "lucide-react";
 import axios from "axios";
 import Swal from 'sweetalert2';
 import { useNavigate } from "react-router-dom";
+import { useAuth } from '../context/AuthContext';
 
 function Cat_Management() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -18,13 +20,12 @@ function Cat_Management() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const userId = sessionStorage.getItem('userId');
-    if (!userId) {
+    if (!user) {
       navigate('/');
       return;
     }
     fetchCategories();
-  }, [navigate]);
+  }, [navigate, user]);
 
   const fetchCategories = async () => {
     try {

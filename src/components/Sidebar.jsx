@@ -2,9 +2,11 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { Home, LogOut, Database, Users, Package, BookOpen, BadgeIndianRupee, CreditCard, ChartNoAxesCombined, SlidersHorizontal, Building2 } from "lucide-react";
 import Swal from 'sweetalert2';
+import { useAuth } from '../context/AuthContext';
 
 const Sidebar = ({ isOpen }) => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const handleLogout = () => {
     Swal.fire({
@@ -17,8 +19,8 @@ const Sidebar = ({ isOpen }) => {
       confirmButtonText: 'Yes, logout!'
     }).then((result) => {
       if (result.isConfirmed) {
-        // Clear session storage
-        sessionStorage.clear();
+        // Use the logout function from auth context
+        logout();
         
         // Show toast notification instead of modal
         Swal.fire({

@@ -4,6 +4,7 @@ import axios from 'axios';
 import Sidebar from "../components/Sidebar";
 import "../assets/styles/Dashboard.css";
 import Swal from 'sweetalert2';
+import { useAuth } from '../context/AuthContext';
 
 function Dashboard() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -18,23 +19,18 @@ function Dashboard() {
         recentActivity: []
     });
     const navigate = useNavigate();
+    const { user } = useAuth();
 
     useEffect(() => {
-        const userId = sessionStorage.getItem('userId');
-        if (!userId) {
+        if (!user) {
             navigate('/');
             return;
         }
 
         const fetchDashboardData = async () => {
             try {
-                // Fetch user data
-                const userResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/users/${userId}`);
-                if (userResponse.data.user) {
-                    setUserData(userResponse.data.user);
-                } else {
-                    throw new Error('User data not found in response');
-                }
+                // Set user data from auth context
+                setUserData(user);
 
                 // Fetch dashboard statistics
                 const [clientsResponse, estimatesResponse] = await Promise.all([
@@ -100,7 +96,7 @@ function Dashboard() {
         };
 
         fetchDashboardData();
-    }, [navigate]);
+    }, [navigate, user]);
 
     const toggleSidebar = () => {
         setIsSidebarOpen(!isSidebarOpen);

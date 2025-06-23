@@ -7,6 +7,7 @@ import autoTable from 'jspdf-autotable';
 import * as QRCode from 'qrcode';
 import Sidebar from "../components/Sidebar";
 import "../assets/styles/Client.css";
+import { useAuth } from '../context/AuthContext';
 
 // Create a reusable function for adding the PAID seal
 const addPaidSeal = (doc) => {
@@ -29,6 +30,7 @@ const addPaidSeal = (doc) => {
 function ClientDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [client, setClient] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -142,8 +144,7 @@ function ClientDetails() {
   };
 
   useEffect(() => {
-    const userId = sessionStorage.getItem('userId');
-    if (!userId) {
+    if (!user) {
       navigate('/');
       return;
     }
@@ -234,7 +235,7 @@ function ClientDetails() {
     };
 
     fetchData();
-  }, [id, navigate]);
+  }, [id, navigate, user]);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);

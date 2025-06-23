@@ -1,8 +1,8 @@
 import React from 'react'
-import axios from 'axios'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
+import { useAuth } from '../context/AuthContext'
 import '../assets/styles/Login.css'
 import '../assets/styles/Main.css'
 
@@ -11,55 +11,75 @@ function Login() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
+  const { login, isAuthenticated, loading, isInitialized } = useAuth()
+
+  // Redirect if user is already authenticated
+  useEffect(() => {
+    if (isInitialized && isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, isInitialized, navigate]);
+
+  // Show loading while checking authentication
+  if (!isInitialized || loading) {
+    return (
+      <div className="login-container">
+        <div className="login-box">
+          <div style={{ textAlign: 'center' }}>
+            <div className="loading-spinner" style={{
+              width: '40px',
+              height: '40px',
+              border: '4px solid #f3f3f3',
+              borderTop: '4px solid #3498db',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 20px'
+            }}></div>
+            <p>Checking authentication...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsLoading(true)
+    
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/users/login`, {
-        email,
-        password
-      });
+      const result = await login(email, password)
       
-      if (response.status === 200) {
+      if (result.success) {
         // Login successful
-        const userId = response.data.user._id;
-        console.log(userId)
-        // Store user ID in session storage
-        sessionStorage.setItem('userId', userId);
-        // Navigate to dashboard or home page
+        Swal.fire({
+          icon: 'success',
+          title: 'Login Successful',
+          text: 'Welcome back!',
+          showConfirmButton: false,
+          timer: 1500
+        });
+        
+        // Navigate to dashboard
         navigate('/dashboard');
-      }
-    } catch (error) {
-      console.error('Login failed:', error);
-      // Handle login error (show message to user)
-      if (error.response) {
-        if (error.response.status === 401) {
-          Swal.fire({
-            icon: 'error',
-            title: 'Invalid Credentials',
-            text: 'The email or password you entered is incorrect.',
-            showConfirmButton: false,
-            timer: 3000
-          });
-        } else if (error.response.status === 500) {
-          Swal.fire({
-            icon: 'error',
-            title: 'Server Error',
-            text: 'There was a problem with the server. Please try again later.',
-            showConfirmButton: false,
-            timer: 3000
-          });
-        }
       } else {
+        // Login failed
         Swal.fire({
           icon: 'error',
-          title: 'Connection Error',
-          text: 'Could not connect to the server. Please check your internet connection.',
+          title: 'Login Failed',
+          text: result.error || 'Invalid credentials',
           showConfirmButton: false,
           timer: 3000
         });
       }
+    } catch (error) {
+      console.error('Login error:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Connection Error',
+        text: 'Could not connect to the server. Please check your internet connection.',
+        showConfirmButton: false,
+        timer: 3000
+      });
     } finally {
       setIsLoading(false)
     }

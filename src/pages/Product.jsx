@@ -3,18 +3,19 @@ import Sidebar from "../components/Sidebar";
 import "../assets/styles/Product.css";
 import { Layers, FolderTree, FolderKanban } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from '../context/AuthContext';
 
 function Product() {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
-    const userId = sessionStorage.getItem('userId');
-    if (!userId) {
+    if (!user) {
       navigate('/');
       return;
     }
-  }, [navigate]);
+  }, [navigate, user]);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);

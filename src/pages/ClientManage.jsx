@@ -5,21 +5,22 @@ import "../assets/styles/Client.css";
 import { Users, Mail, Phone, MapPin, Briefcase } from "lucide-react";
 import axios from "axios";
 import Swal from 'sweetalert2';
+import { useAuth } from '../context/AuthContext';
 
 function ClientManage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [clients, setClients] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
-    const userId = sessionStorage.getItem('userId');
-    if (!userId) {
+    if (!user) {
       navigate('/');
       return;
     }
     fetchClients();
-  }, [navigate]);
+  }, [navigate, user]);
 
   const fetchClients = async () => {
     try {

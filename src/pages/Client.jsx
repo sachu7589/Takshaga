@@ -5,6 +5,7 @@ import "../assets/styles/Client.css";
 import { UserPlus, Pencil, CheckSquare } from "lucide-react";
 import axios from "axios";
 import Swal from 'sweetalert2';
+import { useAuth } from '../context/AuthContext';
 
 function Client() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -19,14 +20,14 @@ function Client() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
-    const userId = sessionStorage.getItem('userId');
-    if (!userId) {
+    if (!user) {
       navigate('/');
       return;
     }
-  }, [navigate]);
+  }, [navigate, user]);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);

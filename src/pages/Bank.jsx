@@ -3,6 +3,8 @@ import Sidebar from '../components/Sidebar';
 import { Plus, Edit2, Trash2, X } from 'lucide-react';
 import Swal from 'sweetalert2';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const Bank = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -19,11 +21,17 @@ const Bank = () => {
     accountType: '',
     upiId: ''
   });
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   // Load banks from API on component mount
   useEffect(() => {
+    if (!user) {
+      navigate('/');
+      return;
+    }
     fetchBanks();
-  }, []);
+  }, [navigate, user]);
 
   const fetchBanks = async () => {
     try {

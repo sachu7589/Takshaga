@@ -4,6 +4,7 @@ import axios from "axios";
 import Swal from 'sweetalert2';
 import Sidebar from "../components/Sidebar";
 import "../assets/styles/ClientDetails.css";
+import { useAuth } from '../context/AuthContext';
 
 function EstimateGenerationClient() {
   const { id } = useParams();
@@ -41,9 +42,10 @@ function EstimateGenerationClient() {
     unitType: "pieces" // Default unit type
   });
 
+  const { user } = useAuth();
+
   useEffect(() => {
-    const userId = sessionStorage.getItem('userId');
-    if (!userId) {
+    if (!user) {
       navigate('/');
       return;
     }
@@ -83,7 +85,7 @@ function EstimateGenerationClient() {
     };
 
     fetchAllData();
-  }, [id, navigate]);
+  }, [id, navigate, user]);
 
   // Filter subcategories based on selected category
   const filteredSubcategories = selectedCategory
