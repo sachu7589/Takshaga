@@ -156,7 +156,7 @@ const PdfTemplate = () => {
           await new Promise((resolve) => {
             img.onload = () => {
               try {
-                const margin = 20;
+                const margin = 8;
                 const contentWidth = pageWidth - (2 * margin);
                 const contentHeight = pageHeight - (2 * margin);
                 
@@ -183,7 +183,7 @@ const PdfTemplate = () => {
                 const watermarkY = pageHeight / 2;
                 
                 // Calculate how many repetitions fit across the page
-                const spacing = watermarkWidth + 20; // 20mm spacing between repetitions
+                const spacing = watermarkWidth + 10; // 10mm spacing between repetitions
                 const repetitions = Math.ceil(pageWidth / spacing);
                 
                 // Center the pattern
