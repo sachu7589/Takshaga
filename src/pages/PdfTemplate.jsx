@@ -175,7 +175,7 @@ const PdfTemplate = () => {
                 pdf.addImage(img, 'JPEG', x, y, imgWidth, imgHeight, undefined, 'FAST');
                 
                 // Add watermark
-                pdf.setTextColor(255, 255, 255, 0.2); // White with low opacity
+                pdf.setTextColor(255, 255, 255); // Semi-transparent white
                 pdf.setFontSize(12);
                 pdf.setFont('helvetica', 'normal');
                 const watermarkText = 'www.takshaga.com';
@@ -183,7 +183,7 @@ const PdfTemplate = () => {
                 const watermarkY = pageHeight / 2;
                 
                 // Calculate how many repetitions fit across the page
-                const spacing = watermarkWidth + 10; // 10mm spacing between repetitions
+                const spacing = watermarkWidth + 5; // 5mm spacing between repetitions
                 const repetitions = Math.ceil(pageWidth / spacing);
                 
                 // Center the pattern
