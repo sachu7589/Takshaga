@@ -69,8 +69,10 @@ const PdfTemplate = () => {
       const img = new Image();
       
       img.onload = () => {
-        // Calculate new dimensions (max 800px width/height)
-        const maxSize = 800;
+        // Mobile optimization: smaller max size for mobile devices
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const maxSize = isMobile ? 400 : 800; // Smaller size for mobile
+        
         let { width, height } = img;
         
         if (width > height) {
@@ -88,9 +90,10 @@ const PdfTemplate = () => {
         canvas.width = width;
         canvas.height = height;
         
-        // Draw and compress
+        // Draw and compress with lower quality for mobile
         ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob(resolve, 'image/jpeg', 0.7); // 70% quality
+        const quality = isMobile ? 0.5 : 0.7; // Lower quality for mobile
+        canvas.toBlob(resolve, 'image/jpeg', quality);
       };
       
       img.src = URL.createObjectURL(file);
