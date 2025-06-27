@@ -1,6 +1,6 @@
 // Sidebar Component
 import { NavLink, useNavigate } from "react-router-dom";
-import { Home, LogOut, Database, Users, Package, BookOpen, BadgeIndianRupee, CreditCard, ChartNoAxesCombined, SlidersHorizontal, Building2 } from "lucide-react";
+import { Home, LogOut, Database, Users, Package, BookOpen, BadgeIndianRupee, CreditCard, ChartNoAxesCombined, SlidersHorizontal, Building2, FileText } from "lucide-react";
 import Swal from 'sweetalert2';
 import { useAuth } from '../context/AuthContext';
 
@@ -133,6 +133,17 @@ const Sidebar = ({ isOpen }) => {
             >
               <ChartNoAxesCombined size={20}/>
               Report
+            </NavLink>
+          </li>
+          <li>
+            <NavLink
+              to="/pdf-template"
+              className={({ isActive }) =>
+                `nav-link ${isActive ? 'active' : ''}`
+              }
+            >
+              <FileText size={20}/>
+              PDF Template
             </NavLink>
           </li>
         </ul>

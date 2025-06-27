@@ -22,6 +22,7 @@ import EstimateGenerationClient from './pages/EstimateGenerationClient'
 import EstimatePreview from './pages/EstimatePreview'
 import CompletedProjects from './pages/CompletedProjects'
 import CompletedProjectDetails from './pages/CompletedProjectDetails'
+import PdfTemplate from './pages/PdfTemplate'
 
 // App Routes Component
 const AppRoutes = () => {
@@ -144,6 +145,11 @@ const AppRoutes = () => {
       <Route path='/completed-project-details/:id' element={
         <ProtectedRoute>
           <CompletedProjectDetails/>
+        </ProtectedRoute>
+      }/>
+      <Route path='/pdf-template' element={
+        <ProtectedRoute>
+          <PdfTemplate/>
         </ProtectedRoute>
       }/>
     </Routes>
