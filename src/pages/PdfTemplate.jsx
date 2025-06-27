@@ -7,6 +7,7 @@ const PdfTemplate = () => {
   const [uploadedImages, setUploadedImages] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const fileInputRef = useRef(null);
 
   const handleFileSelect = (files) => {
@@ -112,88 +113,131 @@ const PdfTemplate = () => {
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
 
-      // Add first page image (full page)
-      const firstPageImg = new Image();
-      firstPageImg.src = '/src/assets/images/first page.png';
-      await new Promise((resolve) => {
-        firstPageImg.onload = () => {
-          // Fit to full page
-          pdf.addImage(firstPageImg, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
-          resolve();
-        };
-      });
+      // Add first page image (full page) - use public folder path
+      try {
+        const firstPageImg = new Image();
+        firstPageImg.crossOrigin = 'anonymous';
+        firstPageImg.src = '/first page.png'; // Public folder path
+        
+        await new Promise((resolve) => {
+          firstPageImg.onload = () => {
+            try {
+              pdf.addImage(firstPageImg, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+              resolve();
+            } catch (error) {
+              console.warn('Error adding first page image:', error);
+              resolve(); // Continue without first page if error
+            }
+          };
+          firstPageImg.onerror = () => {
+            console.warn('Could not load first page image');
+            resolve(); // Continue without first page if error
+          };
+        });
+      } catch (error) {
+        console.warn('Error with first page:', error);
+      }
 
       // Add uploaded images starting from page 2 (with margins and watermarks)
       for (let i = 0; i < uploadedImages.length; i++) {
         pdf.addPage();
         
-        // Compress the image first
-        const compressedBlob = await compressImage(uploadedImages[i].file);
-        const compressedUrl = URL.createObjectURL(compressedBlob);
-        
-        const img = new Image();
-        img.src = compressedUrl;
-        
-        await new Promise((resolve) => {
-          img.onload = () => {
-            const margin = 20;
-            const contentWidth = pageWidth - (2 * margin);
-            const contentHeight = pageHeight - (2 * margin);
-            
-            const imgAspectRatio = img.width / img.height;
-            let imgWidth = contentWidth;
-            let imgHeight = contentWidth / imgAspectRatio;
-            
-            if (imgHeight > contentHeight) {
-              imgHeight = contentHeight;
-              imgWidth = contentHeight * imgAspectRatio;
-            }
-            
-            const x = (pageWidth - imgWidth) / 2;
-            const y = (pageHeight - imgHeight) / 2;
-            
-            pdf.addImage(img, 'JPEG', x, y, imgWidth, imgHeight, undefined, 'FAST');
-            
-            // Add watermark
-            pdf.setTextColor(255, 255, 255, 0.2); // White with low opacity
-            pdf.setFontSize(12);
-            pdf.setFont('helvetica', 'normal');
-            const watermarkText = 'www.takshaga.com';
-            const watermarkWidth = pdf.getTextWidth(watermarkText);
-            const watermarkY = pageHeight / 2;
-            
-            // Calculate how many repetitions fit across the page
-            const spacing = watermarkWidth + 20; // 20mm spacing between repetitions
-            const repetitions = Math.ceil(pageWidth / spacing);
-            
-            // Center the pattern
-            const totalWidth = repetitions * spacing;
-            const startX = (pageWidth - totalWidth) / 2;
-            
-            // Draw repeated watermarks
-            for (let j = 0; j < repetitions; j++) {
-              const watermarkX = startX + (j * spacing);
-              pdf.text(watermarkText, watermarkX, watermarkY);
-            }
-            
-            // Clean up compressed URL
-            URL.revokeObjectURL(compressedUrl);
-            resolve();
-          };
-        });
+        try {
+          // Compress the image first
+          const compressedBlob = await compressImage(uploadedImages[i].file);
+          const compressedUrl = URL.createObjectURL(compressedBlob);
+          
+          const img = new Image();
+          img.src = compressedUrl;
+          
+          await new Promise((resolve) => {
+            img.onload = () => {
+              try {
+                const margin = 20;
+                const contentWidth = pageWidth - (2 * margin);
+                const contentHeight = pageHeight - (2 * margin);
+                
+                const imgAspectRatio = img.width / img.height;
+                let imgWidth = contentWidth;
+                let imgHeight = contentWidth / imgAspectRatio;
+                
+                if (imgHeight > contentHeight) {
+                  imgHeight = contentHeight;
+                  imgWidth = contentHeight * imgAspectRatio;
+                }
+                
+                const x = (pageWidth - imgWidth) / 2;
+                const y = (pageHeight - imgHeight) / 2;
+                
+                pdf.addImage(img, 'JPEG', x, y, imgWidth, imgHeight, undefined, 'FAST');
+                
+                // Add watermark
+                pdf.setTextColor(255, 255, 255, 0.2); // White with low opacity
+                pdf.setFontSize(12);
+                pdf.setFont('helvetica', 'normal');
+                const watermarkText = 'www.takshaga.com';
+                const watermarkWidth = pdf.getTextWidth(watermarkText);
+                const watermarkY = pageHeight / 2;
+                
+                // Calculate how many repetitions fit across the page
+                const spacing = watermarkWidth + 20; // 20mm spacing between repetitions
+                const repetitions = Math.ceil(pageWidth / spacing);
+                
+                // Center the pattern
+                const totalWidth = repetitions * spacing;
+                const startX = (pageWidth - totalWidth) / 2;
+                
+                // Draw repeated watermarks
+                for (let j = 0; j < repetitions; j++) {
+                  const watermarkX = startX + (j * spacing);
+                  pdf.text(watermarkText, watermarkX, watermarkY);
+                }
+                
+                // Clean up compressed URL
+                URL.revokeObjectURL(compressedUrl);
+                resolve();
+              } catch (error) {
+                console.error('Error processing image:', error);
+                URL.revokeObjectURL(compressedUrl);
+                resolve();
+              }
+            };
+            img.onerror = () => {
+              console.error('Error loading compressed image');
+              URL.revokeObjectURL(compressedUrl);
+              resolve();
+            };
+          });
+        } catch (error) {
+          console.error('Error processing uploaded image:', error);
+        }
       }
 
-      // Add last page image (full page)
-      pdf.addPage();
-      const lastPageImg = new Image();
-      lastPageImg.src = '/src/assets/images/last page.png';
-      await new Promise((resolve) => {
-        lastPageImg.onload = () => {
-          // Fit to full page
-          pdf.addImage(lastPageImg, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
-          resolve();
-        };
-      });
+      // Add last page image (full page) - use public folder path
+      try {
+        pdf.addPage();
+        const lastPageImg = new Image();
+        lastPageImg.crossOrigin = 'anonymous';
+        lastPageImg.src = '/last page.png'; // Public folder path
+        
+        await new Promise((resolve) => {
+          lastPageImg.onload = () => {
+            try {
+              pdf.addImage(lastPageImg, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+              resolve();
+            } catch (error) {
+              console.warn('Error adding last page image:', error);
+              resolve(); // Continue without last page if error
+            }
+          };
+          lastPageImg.onerror = () => {
+            console.warn('Could not load last page image');
+            resolve(); // Continue without last page if error
+          };
+        });
+      } catch (error) {
+        console.warn('Error with last page:', error);
+      }
 
       pdf.save('takshaga.pdf');
     } catch (error) {
@@ -205,9 +249,12 @@ const PdfTemplate = () => {
   };
 
   return (
-    <div className="app">
-      <Sidebar isOpen={true} />
-      <div className="main-content sidebar-open">
+    <div className={`dashboard-container ${sidebarOpen ? "sidebar-open" : ""}`}>
+      <button className="hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>
+        &#9776;
+      </button>
+      <Sidebar isOpen={sidebarOpen} />
+      <div className={`dashboard-content ${sidebarOpen ? "sidebar-open" : ""}`}>
         <div className="content">
           <div className="pdf-generator-container">
             <div className="page-header">
