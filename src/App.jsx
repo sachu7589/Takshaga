@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { useEffect } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
@@ -157,6 +158,11 @@ const AppRoutes = () => {
 };
 
 function App() {
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_URL}/wake`)
+      .then(() => console.log('Woke up backend'));
+  }, []);
+
   return (
     <AuthProvider>
       <BrowserRouter>
